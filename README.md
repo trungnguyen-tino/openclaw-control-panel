@@ -1,122 +1,108 @@
-# openclaw-panel
+# OpenClaw Control Panel
 
-Python (Flask 3 + gunicorn/gevent) + React 18 (Vite + Tailwind + shadcn-style) management panel for self-hosted OpenClaw VPS. Drop-in replacement for the legacy Node management API at `vps-openclaw-management` with full v2.0.3 feature parity + a modern SPA + SSE log streaming.
+Panel quản lý OpenClaw Gateway tự host trên VPS. Stack: Flask 3 + gunicorn/gevent (Python 3.12) + React 18 SPA (Vite + Tailwind + shadcn). Tích hợp Caddy reverse proxy + Let's Encrypt, self-healing healthcheck, OAuth ChatGPT/Codex, multi-agent, terminal SSE.
 
-## Architecture
+## Cài đặt trên VPS mới (1 lệnh)
 
-```
-Internet
-  │
-  ▼
-┌─────────────────────────────────────┐
-│ Caddy 2 (systemd) — :80 / :443      │ ← reverse proxy + Let's Encrypt
-└─────────────┬───────────────────────┘
-              │
-   ┌──────────┴────────────┐
-   ▼                       ▼
-openclaw.service       openclaw-mgmt.service
-(npm openclaw)         (gunicorn -k gevent wsgi:app)
-port 18789             port 9998
-                       │
-                       ├─ /api/* → Flask blueprints
-                       └─ /     → React SPA (static/dist)
-```
+VPS Ubuntu 22.04 / 24.04, chạy với quyền `root`. Lệnh dưới tải bản latest từ GitHub Releases rồi tự cài Node 22, Caddy, Python 3.12, OpenClaw npm, 4 systemd unit (`openclaw`, `openclaw-mgmt`, `caddy`, `openclaw-healthcheck.timer`).
 
-State files stay byte-compatible with the legacy install (`.env`, `openclaw.json`, per-agent `auth-profiles.json`, `devices/{pending,paired}.json`) so an existing source-installed VPS can drop its files onto the new layout without migration.
-
-## Quick start (VPS install)
-
+**Có domain (auto Let's Encrypt cert):**
 ```bash
-curl -fsSL https://<release-host>/install.sh | sudo bash -s -- \
-    --domain panel.example.com \
-    --release-base https://<release-host>/releases/openclaw-panel \
-    [--mgmt-key <KEY>] [--tag v1.0.0] [--legacy-routing] [--skip-chrome]
+curl -fsSL https://github.com/trungnguyen-tino/openclaw-control-panel/releases/latest/download/bootstrap.sh \
+  | sudo bash -s -- --domain panel.example.com
 ```
 
-Required: Ubuntu 22.04 or 24.04. The script installs Node 24, Caddy 2, Python 3.12 (deadsnakes PPA on 22.04), and 3 systemd services. See `docs/install-guide.md` for flag reference + idempotency notes.
+**Chỉ có IP (cert tự ký):**
+```bash
+curl -fsSL https://github.com/trungnguyen-tino/openclaw-control-panel/releases/latest/download/bootstrap.sh \
+  | sudo bash -s -- --domain 1.2.3.4
+```
+
+**Tuỳ chọn thêm** (gắn sau `--domain`):
+
+| Cờ | Tác dụng |
+|---|---|
+| `--skip-chrome` | Bỏ cài Chromium (tiết kiệm ~500 MB, browser plugin sẽ không chạy) |
+| `--no-firewall` | Không cấu hình UFW (giữ firewall sẵn có của bạn) |
+| `--legacy-routing` | Caddy route `/` thẳng tới daemon thay vì SPA (ẩn panel) |
+| `--mgmt-key <KEY>` | Tự chỉ định API key thay vì để installer random |
+
+Cài xong installer in `OPENCLAW_MGMT_API_KEY` ra màn hình — lưu lại password manager.
+
+> **Trước khi chạy:** DNS A-record của domain phải trỏ về IP VPS, không thì Caddy không lấy được LE cert.
+
+## Sau khi cài
+
+1. Mở `https://<domain>/login` → đăng nhập bằng `OPENCLAW_MGMT_API_KEY` (tab "API Key") hoặc tài khoản admin
+2. Vào `/ai-config` → chọn AI provider (Anthropic, OpenAI, Gemini, Mistral, ...) → dán API key hoặc OAuth ChatGPT
+3. Vào `/chat` → nhấn nút `+` để bắt đầu hội thoại
+4. Đổi mật khẩu admin trong `/` → Tài khoản đăng nhập
+
+## Tính năng
+
+- **Chat AI thời gian thực**: theo dõi + gửi vào sessions của Opencrawl Gateway qua SSE
+- **22 AI provider built-in**: Anthropic, OpenAI, OpenAI-Codex (OAuth), Gemini, Mistral, Groq, DeepSeek, Bedrock, Cohere, Azure, xAI, OpenRouter, Together, Fireworks, ... + Custom OpenAI-compatible
+- **OAuth ChatGPT/Codex**: PKCE flow, không cần API key
+- **Multi-agent**: nhiều agent độc lập, mỗi agent có model + auth riêng
+- **Self-update**: nâng cấp `openclaw` npm + Management API từ GitHub Releases ngay trong panel
+- **Self-healing**: systemd timer kiểm tra cert / api / gateway / WS mỗi 5 phút, tự khôi phục
+- **SSL Let's Encrypt** + **WAF rate-limit** + **CIDR whitelist** + **Bearer auth scrypt**
+- **Terminal qua trình duyệt** (SSE PTY stream)
+- **Log streaming** journald qua SSE
+- **Domain pairing**: ghép thiết bị qua mã 60s
 
 ## Local development
 
 ```bash
 make install-dev      # python venv + npm install
-make dev-api          # gunicorn on 127.0.0.1:9998 with autoreload
-make dev-ui           # vite dev server on :5173, proxies /api → :9998
+make dev-api          # gunicorn :9998 với autoreload
+make dev-ui           # vite dev server :5173 (proxy /api → :9998)
 make test             # pytest (112 tests)
 make build-ui         # vite build → static/dist/
 make lint format      # ruff + black + mypy
 ```
 
-Set `OPENCLAW_HOME=/tmp/openclaw-dev` to keep dev state out of `/opt`.
+Đặt `OPENCLAW_HOME=/tmp/openclaw-dev` để dev state không ghi vào `/opt`.
 
-## Project layout
+## Cấu trúc
 
 ```
-openclaw-panel/
-├── app/
-│   ├── __init__.py            # Flask factory + blueprint wiring
-│   ├── config.py              # PATHS, OAuth constants, CIDR whitelist
-│   ├── auth.py                # scrypt + Bearer + rate-limit
-│   ├── extensions.py          # flask-limiter
-│   ├── caddy/
-│   │   └── Caddyfile.template
-│   ├── providers/
-│   │   ├── known_models.py    # 22 built-in providers (ported from server.js)
-│   │   ├── template_loader.py
-│   │   ├── key_tester.py
-│   │   └── templates/         # 23 provider JSON files
-│   ├── routes/                # 13 route blueprints
-│   ├── services/              # 20+ business-logic modules
-│   └── utils/                 # secrets, dotenv-atomic, ip-cidr, subprocess
-├── ui/
-│   ├── package.json, vite.config.ts, tailwind.config.js
-│   └── src/
-│       ├── main.tsx, App.tsx, index.css
-│       ├── lib/               # api, sse, format, cn
-│       ├── components/        # ui primitives + layout shell
-│       └── routes/            # 10 SPA pages
-├── tests/                     # pytest unit + integration + e2e/Playwright
-├── systemd/                   # service units shipped in install tarball
-├── scripts/build-release-tarball.sh
-├── install.sh
-├── wsgi.py
-└── Makefile
+openclaw-control-panel/
+├── app/                Flask backend (factory + 13 blueprints + 20+ services)
+│   ├── caddy/Caddyfile.template
+│   ├── providers/      22 built-in + JSON template loader
+│   ├── routes/         REST + SSE endpoints
+│   └── services/       business logic, atomic .env writes
+├── ui/                 React 18 SPA (Vite + Tailwind + shadcn)
+├── tests/              pytest + integration + Playwright e2e
+├── systemd/            4 unit + healthcheck timer
+├── scripts/
+│   ├── bootstrap.sh                One-liner downloader
+│   ├── build-release-tarball.sh    Stage + tar.gz + sha256
+│   ├── publish-github-release.sh   gh release create + upload
+│   ├── openclaw-healthcheck.sh     5-min self-heal
+│   ├── openclaw-sync-auth-profiles.sh
+│   └── openclaw-config-enforce.sh
+├── install.sh          Idempotent installer (450 dòng)
+└── wsgi.py             gunicorn entrypoint
 ```
 
-## Backend endpoints (56 routes)
+## API
 
-See `docs/api-reference.md` for the full contract. Highlights:
+56 endpoint REST + 2 SSE. Yêu cầu `Authorization: Bearer $OPENCLAW_MGMT_API_KEY` trừ `/api/health`, `/api/auth/login`, `/pair`. Chi tiết: `docs/api-reference.md`.
 
-- `GET /api/health` — public liveness probe
-- `POST /api/auth/login` — public; returns gateway token
-- `GET|POST|PUT|DELETE /api/agents[...]`, `/api/bindings`, `/api/channels`
-- `PUT /api/config/provider` — switch model with `openclaw.json` schema preserved
-- `POST /api/config/chatgpt-oauth/{start,complete,refresh}` — PKCE OAuth for Codex
-- `GET /api/logs/stream`, `GET /api/terminal/stream` — SSE
-- `GET /pair?token=…` — public; activates 60s pairing window
+## Cập nhật panel
 
-All `/api/*` (except `/api/health`, `/api/auth/login`, `/pair`) require `Authorization: Bearer <OPENCLAW_MGMT_API_KEY>`.
+Trong UI: `/version` → chọn phiên bản từ dropdown (có search + filter beta/stable) → "Nâng cấp OpenClaw" hoặc "Cập nhật Management API". Tarball pull từ GitHub Releases, swap atomic, restart service. Self-update fail-safe: nếu restart lỗi sẽ tự rollback config cũ.
 
-## Differences from the Node source
-
-| Area | Source (v2.0.3) | openclaw-panel |
-|------|------------------|----------------|
-| Runtime | Node 24 raw HTTP | Python 3.12 + Flask 3 + gunicorn/gevent |
-| Mgmt API LoC | 3464 (one file) | 20+ modules, each <250 LoC |
-| Admin UI | inline HTML strings | React 18 SPA (Vite + Tailwind) |
-| `.env` writes | line-by-line replace (corruption risk) | atomic temp + `os.replace` |
-| Routing on `/` | gateway 18789 | SPA + management API; gateway moved to `/gateway/*`. Use `--legacy-routing` to keep source layout. |
-| Caddyfile source | downloaded from GitHub at runtime | shipped in tarball |
-| SPA distribution | n/a | prebuilt tarball; install.sh fetches by tag |
-| OAuth client ID | hardcoded | `OPENAI_CODEX_CLIENT_ID` env override (defaults to source value) |
-
-## Migrating from source
-
-1. Capture state: `tar -czf openclaw-state.tgz /opt/openclaw/.env /opt/openclaw/config /opt/openclaw/Caddyfile`.
-2. Run new `install.sh` (the legacy Node `/opt/openclaw-mgmt/` is renamed to `-legacy-<ts>/`).
-3. State files are byte-compatible — `.env`, `openclaw.json`, `auth-profiles.json`, `devices/*.json` keep working.
-
-See `docs/migration-notes.md` for caveats (Caddy routing change, OAuth refresher timing, rate-limiter reset).
+Hoặc command-line:
+```bash
+sudo systemctl stop openclaw-mgmt
+cd /tmp && curl -fsSL https://github.com/trungnguyen-tino/openclaw-control-panel/releases/latest/download/openclaw-panel.tar.gz -o new.tar.gz
+sudo tar -xzf new.tar.gz -C /opt/openclaw-mgmt --strip-components=1
+sudo systemctl start openclaw-mgmt
+```
 
 ## License
 
-MIT (or your choice — fill in before publishing).
+MIT

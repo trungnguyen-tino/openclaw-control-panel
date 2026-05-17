@@ -1,0 +1,60 @@
+# Python
+.venv/
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+htmlcov/
+.coverage
+.coverage.*
+
+# Node / Vite
+node_modules/
+ui/dist/
+static/dist/
+ui/.vite/
+
+# Env / secrets
+.env
+.env.local
+.env.compose
+docker/.env.compose
+*.pem
+*.key
+
+# IDE
+.vscode/
+.idea/
+.DS_Store
+
+# Build / runtime
+build/
+dist/
+*.log
+upgrade.log
+
+# Test artifacts
+test-results/
+playwright-report/
+.playwright-cache/
+
+# Playwright + screenshot artifacts (local dev only)
+.playwright-mcp/
+*.png
+/plans/
+
+# Internal: planning docs, agent state, MCP server data
+plans/
+.serena/
+.claude/
+
+# Local debug screenshots
+*.png
+!ui/public/*.png
+!docs/assets/*.png
+
+# tsc incremental build info
+ui/tsconfig.tsbuildinfo

@@ -1,0 +1,13 @@
+# openclaw-stub — pretends to be the OpenClaw gateway on :18789.
+#
+# Real openclaw is a npm package with browser + AI deps (~500 MB). The stub
+# serves a static "Control UI" placeholder so Caddy's `/gateway/*` proxy has
+# something to respond. This is enough to validate the panel's reverse-proxy
+# routing without dragging the full LLM gateway into the dev stack.
+
+FROM nginx:1.27-alpine
+
+COPY docker/openclaw-stub.html /usr/share/nginx/html/index.html
+COPY docker/openclaw-stub.conf /etc/nginx/conf.d/default.conf
+
+EXPOSE 18789

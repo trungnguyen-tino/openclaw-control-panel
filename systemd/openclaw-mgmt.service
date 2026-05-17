@@ -1,0 +1,20 @@
+[Unit]
+Description=OpenClaw Management Panel (Python)
+After=network-online.target openclaw.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/opt/openclaw-mgmt
+EnvironmentFile=/opt/openclaw/.env
+Environment=PATH=/opt/openclaw-mgmt/.venv/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+Environment=PYTHONUNBUFFERED=1
+ExecStart=/opt/openclaw-mgmt/.venv/bin/gunicorn -k gevent -w 1 -b 0.0.0.0:9998 --timeout 300 --access-logfile - --error-logfile - wsgi:app
+Restart=always
+RestartSec=10
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

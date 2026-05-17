@@ -1,0 +1,92 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    /* Light theme — ICTSAIGON brand blue (v2 design) */
+    --background: 210 50% 98%;       /* #F6F9FD */
+    --foreground: 215 60% 11%;       /* #0E1A2B (ink) */
+    --card: 0 0% 100%;
+    --card-foreground: 215 60% 11%;
+    --primary: 214 100% 52%;         /* #0A6BFF (brand-600) */
+    --primary-foreground: 0 0% 100%;
+    --secondary: 210 40% 96%;
+    --secondary-foreground: 214 100% 32%;
+    --muted: 210 30% 96%;
+    --muted-foreground: 215 16% 47%;
+    --accent: 214 100% 95%;
+    --accent-foreground: 214 100% 32%;
+    --destructive: 0 84% 50%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 214 32% 91%;
+    --input: 214 32% 91%;
+    --ring: 214 100% 52%;
+    --radius: 0.5rem;
+    --success: 142 70% 35%;
+    --warning: 38 92% 50%;
+  }
+
+  body {
+    @apply bg-background text-foreground antialiased font-sans;
+    font-size: 15px;
+    line-height: 1.55;
+  }
+
+  /* Readability floor: lift every text scale below 14px to 14px, and bump
+     overly-light slate text colors to a contrast level that meets WCAG AA
+     against #F6F9FD background. Source files keep their original utilities;
+     this is a one-place tuning knob the user explicitly asked for. */
+  .text-xs,
+  .text-\[10px\],
+  .text-\[10\.5px\],
+  .text-\[11px\],
+  .text-\[11\.5px\],
+  .text-\[12px\],
+  .text-\[12\.5px\],
+  .text-\[13px\],
+  .text-\[13\.5px\] {
+    font-size: 14px !important;
+    line-height: 1.5 !important;
+  }
+
+  /* Lift light slate text → high-contrast ink. */
+  .text-slate-300,
+  .text-slate-400 {
+    color: rgb(71 85 105) !important;  /* slate-600 */
+  }
+  .text-slate-500 {
+    color: rgb(51 65 85) !important;   /* slate-700 */
+  }
+  /* Bring back ink hierarchy without losing contrast — opacity 0.6+ remains
+     readable on white, anything lower gets bumped. */
+  .opacity-50, .opacity-60 { opacity: 0.75 !important; }
+
+  /* Custom scrollbar (per v2 design) */
+  ::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: #cbd5e1;
+    border-radius: 6px;
+    border: 2px solid #f6f9fd;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: #94a3b8;
+  }
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  /* Hero radial-dot pattern overlay (used by Login hero) */
+  .hero-pattern::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    background-image: radial-gradient(circle, rgba(255, 255, 255, 0.08) 1px, transparent 1px);
+    background-size: 22px 22px;
+    mask-image: linear-gradient(180deg, black 30%, transparent 95%);
+  }
+}

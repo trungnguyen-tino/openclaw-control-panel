@@ -1,0 +1,33 @@
+#!/usr/bin/env bash
+# Mock `systemctl` for the docker-compose dev stack.
+#
+# Behavior summary:
+#   is-active <svc>                → echoes "active", exit 0
+#   show -p ActiveEnterTimestamp X → echoes a recent RFC2822 timestamp
+#   restart|stop|start <svc>       → no-op, exit 0
+#   *                              → exit 0 silently
+#
+# The mgmt-api treats stdout of these calls as the service state, so this is
+# the minimum surface to keep the dashboard happy in dev mode.
+
+set -e
+
+case "$1" in
+  is-active)
+    echo "active"
+    ;;
+  show)
+    # Args: show -p ActiveEnterTimestamp <svc>
+    if [[ "$2" == "-p" && "$3" == "ActiveEnterTimestamp" ]]; then
+      ts=$(date -u "+%a %Y-%m-%d %H:%M:%S UTC")
+      echo "ActiveEnterTimestamp=${ts}"
+    fi
+    ;;
+  restart|stop|start|enable|disable|daemon-reload)
+    # No-op; report success.
+    ;;
+  *)
+    # Unknown subcommand → still exit 0 so tests don't fail.
+    ;;
+esac
+exit 0

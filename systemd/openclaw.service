@@ -1,0 +1,21 @@
+[Unit]
+Description=OpenClaw Gateway
+After=network-online.target caddy.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/opt/openclaw
+EnvironmentFile=/opt/openclaw/.env
+Environment=HOME=/opt/openclaw
+Environment=NODE_ENV=production
+Environment=OPENCLAW_GATEWAY_BIND=lan
+ExecStart=/usr/bin/openclaw gateway --port 18789 --allow-unconfigured
+Restart=always
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

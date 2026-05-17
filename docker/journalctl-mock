@@ -1,0 +1,39 @@
+#!/usr/bin/env bash
+# Mock `journalctl` for the dev container.
+#
+# Real journalctl flags we support:
+#   -u <svc>    service name (passthrough — used to label fake lines)
+#   -n N        number of lines
+#   -f          follow mode (emits a line every 2s forever)
+#   --no-pager  ignored
+#
+# Tail mode generates N synthetic lines instantly so /api/logs?service=X works.
+
+set -e
+
+service="openclaw"
+lines=20
+follow=0
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    -u) service="$2"; shift 2 ;;
+    -n) lines="$2"; shift 2 ;;
+    -f) follow=1; shift ;;
+    --no-pager) shift ;;
+    *) shift ;;
+  esac
+done
+
+now=$(date -u "+%Y-%m-%d %H:%M:%S")
+if [[ "$follow" == "1" ]]; then
+  i=0
+  while true; do
+    i=$((i + 1))
+    echo "${now} dev-host ${service}[1]: heartbeat-${i} (dev mock)"
+    sleep 2
+  done
+else
+  for i in $(seq 1 "$lines"); do
+    echo "${now} dev-host ${service}[1]: line-${i} (dev mock — no real journald)"
+  done
+fi

@@ -1,0 +1,49 @@
+# openclaw-mgmt — Python + gunicorn, prebuilt SPA bundled in.
+#
+# Build context = repo root. Build:
+#   docker build -f docker/Dockerfile.mgmt -t openclaw-mgmt .
+# Local-test only — production uses release tarball + install.sh on the host.
+
+FROM python:3.12-slim AS runtime
+
+ENV PYTHONUNBUFFERED=1 \
+    PIP_DISABLE_PIP_VERSION_CHECK=1 \
+    PIP_NO_CACHE_DIR=1 \
+    OPENCLAW_HOME=/opt/openclaw \
+    OPENCLAW_TEMPLATES_DIR=/etc/openclaw/config
+
+RUN apt-get update -qq \
+ && apt-get install -y -qq --no-install-recommends \
+      ca-certificates curl jq tini \
+ && rm -rf /var/lib/apt/lists/*
+
+# systemctl + journalctl shims so the mgmt API's subprocess calls work without
+# real systemd. Real production uses host's systemctl.
+COPY docker/systemctl-mock /usr/local/bin/systemctl
+COPY docker/journalctl-mock /usr/local/bin/journalctl
+RUN chmod +x /usr/local/bin/systemctl /usr/local/bin/journalctl \
+ && mkdir -p /usr/bin \
+ && ln -sf /usr/local/bin/systemctl /usr/bin/systemctl \
+ && ln -sf /usr/local/bin/journalctl /usr/bin/journalctl
+
+WORKDIR /opt/openclaw-mgmt
+
+COPY requirements.txt ./
+RUN pip install -r requirements.txt
+
+COPY app/ ./app/
+COPY systemd/ ./systemd/
+COPY wsgi.py ./
+# Built by `cd ui && npm run build` before docker build.
+COPY static/dist/ ./static/dist/
+
+# Seed template configs.
+RUN mkdir -p /etc/openclaw/config /opt/openclaw/config/{devices,agents} /opt/openclaw/data \
+ && cp /opt/openclaw-mgmt/app/providers/templates/*.json /etc/openclaw/config/ || true
+
+EXPOSE 9998
+
+ENTRYPOINT ["/usr/bin/tini", "--"]
+CMD ["gunicorn", "-k", "gevent", "-w", "1", "-b", "0.0.0.0:9998", \
+     "--timeout", "300", "--access-logfile", "-", "--error-logfile", "-", \
+     "wsgi:app"]

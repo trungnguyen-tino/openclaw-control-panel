@@ -1,0 +1,58 @@
+#cloud-config
+# Proxmox VE cloud-init user-data — auto-install OpenClaw Panel on first boot.
+#
+# Usage on Proxmox host:
+#   qm set <VMID> --cicustom "user=local:snippets/openclaw-cloud-init.yaml"
+#
+# Variables to substitute BEFORE saving (or use cloud-init `runcmd` template):
+#   {{DOMAIN}}      — e.g. openclaw.example.com OR IP like 192.168.1.50
+#   {{GH_TOKEN}}    — GitHub PAT with repo:read (private repo only; remove if public)
+#   {{BOOTSTRAP_ASSET_ID}} — numeric ID of bootstrap.sh asset in latest release
+#
+# To find BOOTSTRAP_ASSET_ID (run once when cutting a new release):
+#   gh api /repos/trungnguyen-tino/openclaw-control-panel/releases/latest \
+#     --jq '.assets[] | select(.name=="bootstrap.sh") | .id'
+
+hostname: openclaw-{{DOMAIN}}
+manage_etc_hosts: true
+
+# SSH access (your public key — required to debug if install fails).
+ssh_authorized_keys:
+  - ssh-rsa AAAA... your-key-here
+
+# Update apt + ensure curl is present (cloud images usually have it).
+package_update: true
+package_upgrade: false
+packages:
+  - curl
+  - ca-certificates
+  - sshpass
+
+# Run on first boot only.
+runcmd:
+  # Stage 1: fetch bootstrap.sh from GitHub release.
+  - export GH_TOKEN="{{GH_TOKEN}}"
+  - >
+    curl -fsSL
+    -H "Authorization: token $GH_TOKEN"
+    -H "Accept: application/octet-stream"
+    -o /tmp/bootstrap.sh
+    "https://api.github.com/repos/trungnguyen-tino/openclaw-control-panel/releases/assets/{{BOOTSTRAP_ASSET_ID}}"
+  - chmod +x /tmp/bootstrap.sh
+  # Stage 2: run installer in background; log to /var/log/openclaw-install.log.
+  # `setsid` detaches so cloud-init doesn't time out.
+  - >
+    setsid bash -c "GH_TOKEN='$GH_TOKEN' bash /tmp/bootstrap.sh
+    --domain {{DOMAIN}} --no-firewall --skip-chrome --force
+    > /var/log/openclaw-install.log 2>&1" &
+  - echo "OpenClaw bootstrap launched. Tail /var/log/openclaw-install.log for progress." > /etc/motd
+
+# Optional: set timezone + locale.
+timezone: Asia/Ho_Chi_Minh
+locale: en_US.UTF-8
+
+# Optional: set password for root (cloud-init may use SSH key only).
+chpasswd:
+  expire: false
+  list: |
+    root:ChangeMe!2026

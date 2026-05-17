@@ -1,0 +1,34 @@
+{
+    auto_https disable_redirects
+}
+
+{$DOMAIN:localhost} {
+    {$CADDY_TLS:tls internal}
+
+    handle /login {
+        reverse_proxy mgmt:9998
+    }
+    handle /pair {
+        reverse_proxy mgmt:9998
+    }
+    handle /api/* {
+        reverse_proxy mgmt:9998
+    }
+    handle /assets/* {
+        reverse_proxy mgmt:9998
+    }
+    handle / {
+        reverse_proxy mgmt:9998
+    }
+
+    @gateway path /gateway/*
+    handle @gateway {
+        reverse_proxy openclaw:18789 {
+            header_up Host "localhost:18789"
+            header_up -X-Forwarded-For
+            header_up -X-Forwarded-Host
+            header_up -X-Forwarded-Proto
+            header_up -X-Real-IP
+        }
+    }
+}

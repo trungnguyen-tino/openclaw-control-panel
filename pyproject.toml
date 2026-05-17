@@ -1,0 +1,47 @@
+[project]
+name = "openclaw-panel"
+version = "1.0.0"
+description = "Python+React port of vps-openclaw-management"
+requires-python = ">=3.12"
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+extend-exclude = ["ui/", "static/", "_sources/"]
+
+[tool.ruff.lint]
+select = [
+    "E",   # pycodestyle errors
+    "W",   # pycodestyle warnings
+    "F",   # pyflakes
+    "I",   # isort
+    "B",   # flake8-bugbear
+    "S",   # flake8-bandit (security)
+    "UP",  # pyupgrade
+    "N",   # pep8-naming
+]
+ignore = [
+    "S101",  # assert (used in tests)
+    "S104",  # bind 0.0.0.0 (intentional for gunicorn cmd)
+    "E501",  # long lines (handled by formatter)
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["S", "N"]
+
+[tool.black]
+line-length = 100
+target-version = ["py312"]
+extend-exclude = "(ui/|static/|_sources/)"
+
+[tool.mypy]
+python_version = "3.12"
+strict = false
+ignore_missing_imports = true
+warn_unused_ignores = true
+exclude = ["_sources/", "ui/", "static/"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+addopts = "-q --tb=short"

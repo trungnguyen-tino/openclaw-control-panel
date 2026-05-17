@@ -1,0 +1,66 @@
+# openclaw-panel local dev stack.
+#
+# Usage (from repo root):
+#   cd ui && npm run build && cd ..
+#   docker compose -f docker/compose.yaml up --build
+#
+# Then open:
+#   https://localhost/         → SPA login (self-signed cert, accept warning)
+#   http://localhost:9998/     → direct mgmt-api (skip Caddy)
+#   https://localhost/gateway/ → openclaw stub
+#
+# Mgmt API key & gateway token are baked into `.env.compose` — change them or
+# pass via shell env before `up`.
+
+services:
+  mgmt:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.mgmt
+    container_name: openclaw-mgmt
+    environment:
+      OPENCLAW_HOME: /opt/openclaw
+      OPENCLAW_TEMPLATES_DIR: /etc/openclaw/config
+      OPENCLAW_DISABLE_REFRESHER: "1"   # don't ping auth.openai.com from dev
+    env_file:
+      - .env.compose
+    volumes:
+      # Persist state between `up` runs so logins/agents survive restarts.
+      - openclaw-state:/opt/openclaw
+    expose:
+      - "9998"
+    ports:
+      - "9998:9998"   # for direct http://localhost:9998 access
+    restart: unless-stopped
+
+  openclaw:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.openclaw-stub
+    container_name: openclaw-gateway-stub
+    expose:
+      - "18789"
+    restart: unless-stopped
+
+  caddy:
+    image: caddy:2-alpine
+    container_name: openclaw-caddy
+    depends_on:
+      - mgmt
+      - openclaw
+    env_file:
+      - .env.compose
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    ports:
+      - "80:80"
+      - "443:443"
+    restart: unless-stopped
+    command: caddy run --environ --config /etc/caddy/Caddyfile --adapter caddyfile
+
+volumes:
+  openclaw-state:
+  caddy-data:
+  caddy-config:

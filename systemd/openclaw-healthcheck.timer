@@ -1,0 +1,11 @@
+[Unit]
+Description=Run openclaw-healthcheck every 5 minutes
+Requires=openclaw-healthcheck.service
+
+[Timer]
+OnBootSec=2min
+OnUnitActiveSec=5min
+Unit=openclaw-healthcheck.service
+
+[Install]
+WantedBy=timers.target

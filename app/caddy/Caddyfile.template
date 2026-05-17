@@ -1,0 +1,126 @@
+{
+    auto_https disable_redirects
+    servers {
+        trusted_proxies static private_ranges
+    }
+    on_demand_tls {
+        ask http://127.0.0.1:9998/api/health
+    }
+}
+
+# Shared route group — same logic for named HTTPS, HTTPS catch-all, and HTTP.
+(openclaw_routes) {
+    # ANY WebSocket upgrade (regardless of path) → openclaw gateway.
+    # Lets users connect with bare `wss://<domain>` or `wss://<domain>/foo`
+    # without remembering the /gateway path. We REWRITE the upstream URI
+    # to /gateway because openclaw's WS protocol is only registered there;
+    # proxying with the original path causes "protocol mismatch" rejection.
+    @ws_any header Connection *Upgrade*
+    handle @ws_any {
+        rewrite * /gateway
+        reverse_proxy 127.0.0.1:18789 {
+            header_up Host "localhost:18789"
+            header_up Origin "http://localhost:18789"
+            header_up -X-Forwarded-For
+            header_up -X-Real-IP
+        }
+    }
+    # Plain HTTP at /gateway (non-WS health probes etc.) — keep explicit.
+    @ws_gateway path /gateway
+    handle @ws_gateway {
+        reverse_proxy 127.0.0.1:18789 {
+            header_up Host "localhost:18789"
+            header_up Origin "http://localhost:18789"
+            header_up -X-Forwarded-For
+            header_up -X-Real-IP
+        }
+    }
+    # Control UI assets (hashed filenames) — cache aggressively. Hash in
+    # filename is the cache-busting mechanism; new daemon ship new hashes.
+    # Override upstream's no-cache (daemon sets it on every response).
+    @gw_assets path /gw/assets/*
+    handle @gw_assets {
+        reverse_proxy 127.0.0.1:18789 {
+            header_up Host "localhost:18789"
+            header_up Origin "http://localhost:18789"
+            header_up -X-Forwarded-For
+            header_up -X-Real-IP
+            header_down Cache-Control "public, max-age=31536000, immutable"
+            lb_try_duration 15s
+            lb_try_interval 500ms
+            fail_duration 0s
+        }
+    }
+    # Control UI HTML shell + everything else under /gw/* — never cache;
+    # HTML must always pick up the latest asset hashes.
+    @gw path /gw /gw/*
+    handle @gw {
+        reverse_proxy 127.0.0.1:18789 {
+            header_up Host "localhost:18789"
+            header_up Origin "http://localhost:18789"
+            header_up -X-Forwarded-For
+            header_up -X-Real-IP
+            header_down Cache-Control "no-cache, no-store, must-revalidate"
+            header_down Pragma "no-cache"
+            header_down Expires "0"
+            lb_try_duration 15s
+            lb_try_interval 500ms
+            fail_duration 0s
+        }
+    }
+    # Legacy /gateway/* (back-compat).
+    @gateway path /gateway/*
+    handle @gateway {
+        reverse_proxy 127.0.0.1:18789 {
+            header_up Host "localhost:18789"
+            header_up Origin "http://localhost:18789"
+            header_up -X-Forwarded-For
+            header_up -X-Forwarded-Host
+            header_up -X-Forwarded-Proto
+            header_up -X-Real-IP
+        }
+    }
+    # Everything else → mgmt API (REST + SPA shell w/ deep-link fallback).
+    handle {
+        reverse_proxy 127.0.0.1:9998
+    }
+}
+
+# Primary HTTPS site for DOMAIN — Caddy auto-ACME when CADDY_TLS is empty,
+# self-signed when CADDY_TLS=tls internal (DOMAIN is an IP or http://).
+{$DOMAIN:localhost} {
+    {$CADDY_TLS}
+    import openclaw_routes
+}
+
+# HTTPS catch-all for SNI that didn't match the named site (LAN IP, etc.).
+# Uses self-signed via on_demand so any host gets a cert.
+:443 {
+    tls internal {
+        on_demand
+    }
+    import openclaw_routes
+}
+
+# Plaintext :80 — upstream proxies (NPM, Cloudflare Tunnel) forward here.
+:80 {
+    import openclaw_routes
+}
+
+# Legacy port 18790 — redirect bare hits to /gw/ on main port.
+:18790 {
+    tls internal {
+        on_demand
+    }
+    redir / /gw/ 308
+    rewrite * /gw{uri}
+    reverse_proxy 127.0.0.1:18789 {
+        header_up Host "localhost:18789"
+        header_up Origin "http://localhost:18789"
+        header_up -X-Forwarded-For
+        header_up -X-Real-IP
+        lb_try_duration 15s
+        lb_try_interval 500ms
+        fail_duration 0s
+    }
+}

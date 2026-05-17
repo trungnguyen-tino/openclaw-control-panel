@@ -1,4 +1,5 @@
 import { IctsaigonLogo } from "./IctsaigonLogo";
+import { cn } from "@/lib/cn";
 
 interface BrandLogoProps {
   size?: number;
@@ -10,11 +11,11 @@ interface BrandLogoProps {
 /**
  * Renders the active brand logo per `<html data-theme="…">`.
  *
- * - `default` (or unset) → Tino logo from /themes/tino-logo.png
- * - `ictsaigon` → existing inline ICTSAIGON SVG mark + wordmark
- *
- * Reads the theme once from the DOM at module-load. SPA reloads on theme
- * change (server-side env switch), so a static read is enough.
+ * - `default` (or unset) → inline OpenClaw SVG mark + wordmark, single-color
+ *   via `currentColor` so it adapts to parent text color (dark on light bg,
+ *   white on dark hero).
+ * - `ictsaigon` → existing inline ICTSAIGON SVG mark + wordmark (hardcoded
+ *   blue + yellow fills).
  */
 function currentTheme(): string {
   if (typeof document === "undefined") return "default";
@@ -22,46 +23,61 @@ function currentTheme(): string {
 }
 
 export function BrandLogo({ size = 32, full = true, className }: BrandLogoProps) {
-  const theme = currentTheme();
-  if (theme === "ictsaigon") {
+  if (currentTheme() === "ictsaigon") {
     return <IctsaigonLogo size={size} full={full} className={className} />;
   }
-  // Tino mobile-light logo PNG (512×69, ratio ≈ 7.42:1). Sized by height so
-  // the wordmark scales identically to the ICTSAIGON ratio (≈2.95:1) when
-  // `full` is true. For `full=false` we crop the leftmost square via CSS.
-  const wordmarkRatio = 7.42;
-  const markCropPct = 100 * (1 / wordmarkRatio);
+  return <OpenclawLogo size={size} full={full} className={className} />;
+}
+
+/**
+ * OpenClaw default mark — stylized open-claw "O" (circle with claw notch on
+ * the right) + Opencrawl wordmark. Single colour via `currentColor`.
+ */
+function OpenclawLogo({ size, full, className }: Required<Pick<BrandLogoProps, "size">> & BrandLogoProps) {
   if (!full) {
-    // Square crop of the left side (mark only).
     return (
-      <div
+      <svg
+        width={size}
+        height={size}
+        viewBox="0 0 50 50"
+        xmlns="http://www.w3.org/2000/svg"
         className={className}
-        style={{
-          width: size,
-          height: size,
-          overflow: "hidden",
-        }}
+        aria-label="OpenClaw"
       >
-        <img
-          src="/themes/tino-logo.png"
-          alt="Tino"
-          style={{
-            height: size,
-            width: `${size * wordmarkRatio}px`,
-            objectFit: "cover",
-            objectPosition: "left",
-            clipPath: `inset(0 ${100 - markCropPct}% 0 0)`,
-          }}
-        />
-      </div>
+        <OpenclawMark />
+      </svg>
     );
   }
+  // Use inline-flex so the SVG mark and HTML wordmark share the same baseline
+  // and the wordmark picks up the page font (Plus Jakarta Sans).
   return (
-    <img
-      src="/themes/tino-logo.png"
-      alt="Tino"
-      style={{ height: size, width: "auto" }}
-      className={className}
-    />
+    <span
+      className={cn("inline-flex items-center gap-2", className)}
+      style={{ height: size }}
+      aria-label="OpenClaw"
+    >
+      <svg width={size} height={size} viewBox="0 0 50 50" xmlns="http://www.w3.org/2000/svg">
+        <OpenclawMark />
+      </svg>
+      <span
+        className="font-extrabold tracking-tight leading-none"
+        style={{ fontSize: size * 0.62, color: "currentColor" }}
+      >
+        Opencrawl
+      </span>
+    </span>
+  );
+}
+
+function OpenclawMark() {
+  // The mark is a thick C-shape opening to the right (claw silhouette), with
+  // a small accent dot. All paths use `currentColor` so callers control hue.
+  return (
+    <g fill="currentColor">
+      {/* Outer claw ring: ~3/4 circle, gap on the right between 50° and -50° */}
+      <path d="M25 4 a21 21 0 1 1 14.85 35.85 l-5.66-5.66 a13 13 0 1 0 -9.19 -3.81 z" />
+      {/* Accent dot inside the mouth, suggesting a target / grabbed object */}
+      <circle cx="36" cy="25" r="3.5" opacity="0.7" />
+    </g>
   );
 }

@@ -6,6 +6,7 @@ blueprint registration here, keeping `create_app` linear and discoverable.
 
 from __future__ import annotations
 
+import os
 from pathlib import Path
 from typing import Any
 
@@ -181,7 +182,13 @@ def register_cors(app: Flask) -> None:
 
 
 def register_spa_fallback(app: Flask) -> None:
-    """Serve React SPA for any non-API path so client-side routing works."""
+    """Serve React SPA for any non-API path so client-side routing works.
+
+    `index.html` carries a `data-theme="__OPENCLAW_THEME__"` placeholder on
+    <html>; we substitute the live value from env on every request. SPA reads
+    the attribute at startup to pick the brand logo + colour palette.
+    """
+    valid_themes = {"default", "ictsaigon"}
 
     @app.route("/", defaults={"path": ""})
     @app.route("/<path:path>")
@@ -194,7 +201,13 @@ def register_spa_fallback(app: Flask) -> None:
             return send_from_directory(static_root, path)
         index = _STATIC_DIST / "index.html"
         if index.is_file():
-            return send_from_directory(static_root, "index.html")
+            theme = os.environ.get("OPENCLAW_THEME", "default")
+            if theme not in valid_themes:
+                theme = "default"
+            html = index.read_text(encoding="utf-8").replace(
+                "__OPENCLAW_THEME__", theme
+            )
+            return html, 200, {"Content-Type": "text/html; charset=utf-8"}
         return (
             "<h1>OpenClaw Panel</h1><p>SPA not built. Run <code>make build-ui</code>.</p>",
             200,

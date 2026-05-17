@@ -5,7 +5,7 @@ import { api, jsonBody, setStoredKey } from "@/lib/api";
 import { Button } from "@/components/ui/Button";
 import { Field } from "@/components/ui/Field";
 import { Input } from "@/components/ui/Input";
-import { IctsaigonLogo } from "@/components/ui/IctsaigonLogo";
+import { BrandLogo } from "@/components/ui/BrandLogo";
 
 type AuthMode = "password" | "apikey";
 
@@ -49,7 +49,7 @@ export function LoginPage() {
       {/* Hero — left col, desktop only */}
       <aside className="hero-pattern relative hidden md:flex md:flex-1 bg-gradient-to-br from-brand-700 via-brand-800 to-brand-900 text-white p-12 flex-col justify-between overflow-hidden">
         <div className="flex items-center gap-3.5 z-10">
-          <IctsaigonLogo size={40} full />
+          <BrandLogo size={40} full />
           <div className="text-lg font-extrabold tracking-tight leading-tight">
             Opencrawl Management Panel
           </div>
@@ -81,7 +81,7 @@ export function LoginPage() {
       <section className="flex-1 max-w-full md:max-w-[480px] flex items-center justify-center p-6 md:p-10">
         <div className="w-full max-w-md">
           <div className="md:hidden flex items-center gap-2 mb-6 justify-center">
-            <IctsaigonLogo size={28} full />
+            <BrandLogo size={28} full />
           </div>
           <div className="text-xs tracking-[0.12em] uppercase text-brand-700 font-bold">
             Đăng nhập

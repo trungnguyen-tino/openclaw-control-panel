@@ -10,6 +10,8 @@
 #   --tag <vN>                 (optional) release tag (default: latest)
 #   --release-base <URL>       (optional) override panel tarball base URL
 #   --tarball <PATH>           (optional) install from a local tarball (skip download)
+#   --theme <NAME>             (optional) UI theme: "default" (Tino green, the
+#                              default) or "ictsaigon" (blue)
 #   --legacy-routing           (optional) Caddy routes / → gateway (source layout)
 #   --no-firewall              (optional) skip ufw configuration
 #   --skip-chrome              (optional) skip Google Chrome install
@@ -30,6 +32,7 @@ NO_FIREWALL=0
 SKIP_CHROME=0
 FORCE=0
 AUTH_HEADER=""  # optional `Authorization: token <PAT>` for private GitHub release downloads
+THEME="default"  # "default" (Tino green) | "ictsaigon" (blue)
 
 # Constants
 OPENCLAW_HOME=/opt/openclaw
@@ -54,6 +57,7 @@ parse_flags() {
       --release-base)   RELEASE_BASE="$2"; shift 2 ;;
       --tarball)        LOCAL_TARBALL="$2"; shift 2 ;;
       --auth-header)    AUTH_HEADER="$2"; shift 2 ;;
+      --theme)          THEME="$2"; shift 2 ;;
       --legacy-routing) LEGACY_ROUTING=1; shift ;;
       --no-firewall)    NO_FIREWALL=1; shift ;;
       --skip-chrome)    SKIP_CHROME=1; shift ;;
@@ -64,6 +68,10 @@ parse_flags() {
     esac
   done
   [[ -n "$DOMAIN" ]] || die "--domain required"
+  case "$THEME" in
+    default|ictsaigon) ;;
+    *) die "--theme must be 'default' or 'ictsaigon', got: $THEME" ;;
+  esac
 }
 
 detect_ubuntu() {
@@ -287,6 +295,7 @@ CADDY_TLS=${caddy_tls}
 OPENCLAW_MGMT_API_KEY=${mgmt_key}
 NODE_OPTIONS=--max-old-space-size=${ram_mb}
 OPENCLAW_PANEL_RELEASE_URL=${release_url}
+OPENCLAW_THEME=${THEME}
 EOF
   chmod 0600 "$OPENCLAW_HOME/.env"
   echo "${mgmt_key}" > /tmp/openclaw-mgmt-key.txt

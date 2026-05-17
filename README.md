@@ -4,12 +4,18 @@ Panel quản lý OpenClaw Gateway tự host trên VPS. Stack: Flask 3 + gunicorn
 
 ## Cài đặt trên VPS mới (1 lệnh)
 
-VPS Ubuntu 22.04 / 24.04, chạy với quyền `root`. Lệnh dưới tải bản latest từ GitHub Releases rồi tự cài Node 22, Caddy, Python 3.12, OpenClaw npm, 4 systemd unit (`openclaw`, `openclaw-mgmt`, `caddy`, `openclaw-healthcheck.timer`).
+VPS Ubuntu 22.04 / 24.04, chạy với quyền `root`. Lệnh dưới tải bản latest từ GitHub Releases rồi tự cài Node 22, Caddy, Python 3.12, OpenClaw npm, 4 systemd unit.
 
-**Có domain (auto Let's Encrypt cert):**
+**Theme mặc định (Tino, màu xanh lá `#14a74b`) — có domain:**
 ```bash
 curl -fsSL https://github.com/trungnguyen-tino/openclaw-control-panel/releases/latest/download/bootstrap.sh \
   | sudo bash -s -- --domain panel.example.com
+```
+
+**Theme ICTSAIGON (logo xanh dương) — có domain:**
+```bash
+curl -fsSL https://github.com/trungnguyen-tino/openclaw-control-panel/releases/latest/download/bootstrap.sh \
+  | sudo bash -s -- --domain panel.example.com --theme ictsaigon
 ```
 
 **Chỉ có IP (cert tự ký):**
@@ -22,26 +28,41 @@ curl -fsSL https://github.com/trungnguyen-tino/openclaw-control-panel/releases/l
 
 | Cờ | Tác dụng |
 |---|---|
-| `--skip-chrome` | Bỏ cài Chromium (tiết kiệm ~500 MB, browser plugin sẽ không chạy) |
-| `--no-firewall` | Không cấu hình UFW (giữ firewall sẵn có của bạn) |
-| `--legacy-routing` | Caddy route `/` thẳng tới daemon thay vì SPA (ẩn panel) |
+| `--theme default` | (mặc định) Logo Tino + bảng màu xanh lá `#14a74b` |
+| `--theme ictsaigon` | Logo iCTSAIGON + bảng màu xanh dương `#1E88E5` |
+| `--skip-chrome` | Bỏ cài Chromium (tiết kiệm ~500 MB) |
+| `--no-firewall` | Không cấu hình UFW |
+| `--legacy-routing` | Caddy route `/` thẳng tới daemon (ẩn panel) |
 | `--mgmt-key <KEY>` | Tự chỉ định API key thay vì để installer random |
 
-Cài xong installer in `OPENCLAW_MGMT_API_KEY` ra màn hình — lưu lại password manager.
+Cài xong installer in `OPENCLAW_MGMT_API_KEY` ra màn hình — lưu vào password manager.
 
 > **Trước khi chạy:** DNS A-record của domain phải trỏ về IP VPS, không thì Caddy không lấy được LE cert.
+
+## Đổi theme sau khi đã cài
+
+Sửa `/opt/openclaw/.env`:
+```ini
+OPENCLAW_THEME=default      # hoặc: ictsaigon
+```
+Rồi restart Management API:
+```bash
+sudo systemctl restart openclaw-mgmt
+```
+
+Refresh trình duyệt (Ctrl+Shift+R) để load HTML mới với theme đổi.
 
 ## Sau khi cài
 
 1. Mở `https://<domain>/login` → đăng nhập bằng `OPENCLAW_MGMT_API_KEY` (tab "API Key") hoặc tài khoản admin
-2. Vào `/ai-config` → chọn AI provider (Anthropic, OpenAI, Gemini, Mistral, ...) → dán API key hoặc OAuth ChatGPT
+2. Vào `/ai-config` → chọn AI provider (Anthropic, OpenAI, Gemini, Mistral, …) → dán API key hoặc OAuth ChatGPT
 3. Vào `/chat` → nhấn nút `+` để bắt đầu hội thoại
 4. Đổi mật khẩu admin trong `/` → Tài khoản đăng nhập
 
 ## Tính năng
 
 - **Chat AI thời gian thực**: theo dõi + gửi vào sessions của Opencrawl Gateway qua SSE
-- **22 AI provider built-in**: Anthropic, OpenAI, OpenAI-Codex (OAuth), Gemini, Mistral, Groq, DeepSeek, Bedrock, Cohere, Azure, xAI, OpenRouter, Together, Fireworks, ... + Custom OpenAI-compatible
+- **22 AI provider built-in**: Anthropic, OpenAI, OpenAI-Codex (OAuth), Gemini, Mistral, Groq, DeepSeek, Bedrock, Cohere, Azure, xAI, OpenRouter, Together, Fireworks, … + Custom OpenAI-compatible
 - **OAuth ChatGPT/Codex**: PKCE flow, không cần API key
 - **Multi-agent**: nhiều agent độc lập, mỗi agent có model + auth riêng
 - **Self-update**: nâng cấp `openclaw` npm + Management API từ GitHub Releases ngay trong panel
@@ -50,6 +71,7 @@ Cài xong installer in `OPENCLAW_MGMT_API_KEY` ra màn hình — lưu lại pass
 - **Terminal qua trình duyệt** (SSE PTY stream)
 - **Log streaming** journald qua SSE
 - **Domain pairing**: ghép thiết bị qua mã 60s
+- **Theme switchable**: Tino mặc định, ICTSAIGON optional, đổi qua env không cần rebuild
 
 ## Local development
 
@@ -74,6 +96,8 @@ openclaw-control-panel/
 │   ├── routes/         REST + SSE endpoints
 │   └── services/       business logic, atomic .env writes
 ├── ui/                 React 18 SPA (Vite + Tailwind + shadcn)
+│   ├── public/themes/  Brand assets (tino-logo.png, …)
+│   └── src/index.css   Theme palettes keyed on html[data-theme=…]
 ├── tests/              pytest + integration + Playwright e2e
 ├── systemd/            4 unit + healthcheck timer
 ├── scripts/
@@ -89,7 +113,7 @@ openclaw-control-panel/
 
 ## API
 
-56 endpoint REST + 2 SSE. Yêu cầu `Authorization: Bearer $OPENCLAW_MGMT_API_KEY` trừ `/api/health`, `/api/auth/login`, `/pair`. Chi tiết: `docs/api-reference.md`.
+56 endpoint REST + 2 SSE. Yêu cầu `Authorization: Bearer $OPENCLAW_MGMT_API_KEY` trừ `/api/health`, `/api/auth/login`, `/pair`.
 
 ## Cập nhật panel
 

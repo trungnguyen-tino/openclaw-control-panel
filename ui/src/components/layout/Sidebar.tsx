@@ -12,7 +12,7 @@ import {
   Terminal as TerminalIcon,
 } from "lucide-react";
 import { cn } from "@/lib/cn";
-import { IctsaigonLogo } from "@/components/ui/IctsaigonLogo";
+import { BrandLogo } from "@/components/ui/BrandLogo";
 import { ComponentType } from "react";
 
 interface NavItemDef {
@@ -49,7 +49,7 @@ export function Sidebar({ onItemClick }: SidebarProps) {
     <aside className="w-[260px] shrink-0 bg-white border-r border-slate-200 flex flex-col h-full">
       {/* Brand */}
       <div className="px-4 py-4 border-b border-slate-200 flex items-center gap-3">
-        <IctsaigonLogo size={28} full />
+        <BrandLogo size={28} full />
         <div className="ml-auto text-right leading-tight whitespace-nowrap">
           <div className="text-[11.5px] font-bold text-ink">Opencrawl</div>
           <div className="text-[10px] text-slate-400 font-mono">Panel v1.1.4</div>

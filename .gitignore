@@ -44,17 +44,15 @@ playwright-report/
 # Playwright + screenshot artifacts (local dev only)
 .playwright-mcp/
 *.png
-/plans/
+!ui/public/*.png
 
-# Internal: planning docs, agent state, MCP server data
-plans/
+# Internal planning + agent state (never committed)
+/plans/
 .serena/
 .claude/
 
-# Local debug screenshots
-*.png
-!ui/public/*.png
-!docs/assets/*.png
-
-# tsc incremental build info
+# tsc -b incremental cache
 ui/tsconfig.tsbuildinfo
+ui/tsconfig.node.tsbuildinfo
+ui/vite.config.d.ts
+ui/vite.config.js

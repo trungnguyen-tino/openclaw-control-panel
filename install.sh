@@ -12,6 +12,8 @@
 #   --tarball <PATH>           (optional) install from a local tarball (skip download)
 #   --theme <NAME>             (optional) UI theme: "default" (Tino green, the
 #                              default) or "ictsaigon" (blue)
+#   --admin-user <USER>        (optional) panel admin username (default: admin)
+#   --admin-pass <PASS>        (optional) panel admin password (default: admin123)
 #   --legacy-routing           (optional) Caddy routes / → gateway (source layout)
 #   --no-firewall              (optional) skip ufw configuration
 #   --skip-chrome              (optional) skip Google Chrome install
@@ -33,6 +35,8 @@ SKIP_CHROME=0
 FORCE=0
 AUTH_HEADER=""  # optional `Authorization: token <PAT>` for private GitHub release downloads
 THEME="default"  # "default" (Tino green) | "ictsaigon" (blue)
+ADMIN_USER="admin"
+ADMIN_PASS="admin123"
 
 # Constants
 OPENCLAW_HOME=/opt/openclaw
@@ -58,6 +62,8 @@ parse_flags() {
       --tarball)        LOCAL_TARBALL="$2"; shift 2 ;;
       --auth-header)    AUTH_HEADER="$2"; shift 2 ;;
       --theme)          THEME="$2"; shift 2 ;;
+      --admin-user)     ADMIN_USER="$2"; shift 2 ;;
+      --admin-pass)     ADMIN_PASS="$2"; shift 2 ;;
       --legacy-routing) LEGACY_ROUTING=1; shift ;;
       --no-firewall)    NO_FIREWALL=1; shift ;;
       --skip-chrome)    SKIP_CHROME=1; shift ;;
@@ -285,7 +291,7 @@ generate_env_if_absent() {
   fi
   # Default OPENCLAW_PANEL_RELEASE_URL points at the GitHub Releases asset
   # pattern that publish-github-release.sh produces. Self-update UI uses it.
-  local release_url="${OPENCLAW_PANEL_RELEASE_URL:-https://github.com/trungnguyen-tino/openclaw-control-panel/releases/download/{tag}/openclaw-panel.tar.gz}"
+  local release_url="${OPENCLAW_PANEL_RELEASE_URL:-https://github.com/trungnguyen-tino/openclaw-panel/releases/download/{tag}/openclaw-panel.tar.gz}"
   cat > "$OPENCLAW_HOME/.env" <<EOF
 OPENCLAW_VERSION=latest
 OPENCLAW_GATEWAY_PORT=18789
@@ -296,6 +302,22 @@ OPENCLAW_MGMT_API_KEY=${mgmt_key}
 NODE_OPTIONS=--max-old-space-size=${ram_mb}
 OPENCLAW_PANEL_RELEASE_URL=${release_url}
 OPENCLAW_THEME=${THEME}
+EOF
+  # Compute scrypt hash for the admin password using stdlib (matches app/auth.py).
+  # Falls back to system python3 if the venv isn't built yet.
+  local py="$MGMT_DIR/.venv/bin/python3"
+  [[ -x "$py" ]] || py="$(command -v python3.12 || command -v python3)"
+  local admin_hash
+  admin_hash=$("$py" - <<PYEOF
+import hashlib, secrets
+salt = secrets.token_bytes(16)
+d = hashlib.scrypt(b"${ADMIN_PASS}", salt=salt, n=16384, r=8, p=1, dklen=64)
+print(f"{salt.hex()}:{d.hex()}")
+PYEOF
+)
+  cat >> "$OPENCLAW_HOME/.env" <<EOF
+OPENCLAW_LOGIN_USER=${ADMIN_USER}
+OPENCLAW_LOGIN_PASS=${admin_hash}
 EOF
   chmod 0600 "$OPENCLAW_HOME/.env"
   echo "${mgmt_key}" > /tmp/openclaw-mgmt-key.txt
@@ -425,9 +447,10 @@ health_check() {
 }
 
 print_summary() {
-  local domain mgmt_key
+  local domain mgmt_key admin_user
   domain=$(grep -E '^DOMAIN=' "$OPENCLAW_HOME/.env" | cut -d= -f2-)
   mgmt_key=$(grep -E '^OPENCLAW_MGMT_API_KEY=' "$OPENCLAW_HOME/.env" | cut -d= -f2-)
+  admin_user=$(grep -E '^OPENCLAW_LOGIN_USER=' "$OPENCLAW_HOME/.env" | cut -d= -f2-)
   cat <<EOF
 
 ===============================================================================
@@ -435,7 +458,8 @@ print_summary() {
 -------------------------------------------------------------------------------
   Domain        : ${domain}
   Dashboard URL : https://${domain}/
-  MGMT API key  : ${mgmt_key}
+  Login         : ${admin_user} / ${ADMIN_PASS}     (tab "Tài khoản")
+  MGMT API key  : ${mgmt_key}                       (tab "API Key")
   Services      : openclaw / caddy / openclaw-mgmt
   Logs          : journalctl -u openclaw-mgmt -f
 ===============================================================================

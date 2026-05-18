@@ -33,6 +33,8 @@ DOMAIN=""
 IP=""
 GATEWAY=""
 ROOT_PASS="ICTsaigon@#2026"  # default — override with --root-pass
+ADMIN_USER="admin"
+ADMIN_PASS="admin123"        # default — override with --admin-pass
 THEME="default"
 GH_TOKEN=""            # optional — only set for private repo install source
 BRIDGE="vmbr0"
@@ -51,6 +53,8 @@ while [[ $# -gt 0 ]]; do
     --ip)         IP="$2"; shift 2 ;;
     --gw)         GATEWAY="$2"; shift 2 ;;
     --root-pass)  ROOT_PASS="$2"; shift 2 ;;
+    --admin-user) ADMIN_USER="$2"; shift 2 ;;
+    --admin-pass) ADMIN_PASS="$2"; shift 2 ;;
     --theme)      THEME="$2"; shift 2 ;;
     --gh-token)   GH_TOKEN="$2"; shift 2 ;;
     --bridge)     BRIDGE="$2"; shift 2 ;;
@@ -108,7 +112,9 @@ else
   - chmod +x /tmp/bootstrap.sh
   - >
     setsid bash -c "bash /tmp/bootstrap.sh
-    --domain ${DOMAIN} --theme ${THEME} ${EXTRA_INSTALL_FLAGS}
+    --domain ${DOMAIN} --theme ${THEME}
+    --admin-user '${ADMIN_USER}' --admin-pass '${ADMIN_PASS}'
+    ${EXTRA_INSTALL_FLAGS}
     > /var/log/openclaw-install.log 2>&1" &
 EOFETCH
 )
@@ -162,6 +168,12 @@ log "Starting VM $VMID"
 qm start "$VMID"
 
 IP_ONLY="${IP%/*}"
-log "Done. Watch install progress:"
-echo "  ssh root@${IP_ONLY} 'tail -f /var/log/openclaw-install.log'"
-echo "  Panel will be at: https://${DOMAIN}/   (theme=${THEME})"
+cat <<EOF
+[clone] Done. VM is booting + bootstrapping (3–6 min). Watch progress:
+
+  ssh root@${IP_ONLY} 'tail -f /var/log/openclaw-install.log'   (root password: ${ROOT_PASS})
+
+Once installed:
+  URL    : https://${DOMAIN}/        (theme=${THEME})
+  Login  : ${ADMIN_USER} / ${ADMIN_PASS}      (tab "Tài khoản" on /login)
+EOF

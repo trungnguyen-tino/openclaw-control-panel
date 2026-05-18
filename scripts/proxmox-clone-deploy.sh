@@ -136,16 +136,35 @@ cat > "$SNIPPET_PATH" <<EOF
 #cloud-config
 hostname: ${NAME}
 manage_etc_hosts: true
-# Root password login (no SSH key). Disable cloud-init password expiry so the
-# fixed password works on first login.
-password: ${ROOT_PASS}
-chpasswd:
-  expire: false
+# --- Root password login (no SSH key) ---
+# Ubuntu cloud image ships with PermitRootLogin=prohibit-password and a drop-in
+# 60-cloudimg-settings.conf that sets PasswordAuthentication=no. We override
+# all three layers so password auth + root login both work:
+#   1. ssh_pwauth: cloud-init mutates sshd config
+#   2. chpasswd.users: set explicit password for root (works even when default
+#      ciuser is 'ubuntu')
+#   3. runcmd sed: force PasswordAuthentication=yes + PermitRootLogin=yes in
+#      the drop-in too, then reload sshd
 ssh_pwauth: true
 disable_root: false
+chpasswd:
+  expire: false
+  users:
+    - name: root
+      password: ${ROOT_PASS}
+      type: text
 package_update: true
 packages: [curl, ca-certificates]
 runcmd:
+  - sed -i 's/^#*\\s*PermitRootLogin.*/PermitRootLogin yes/' /etc/ssh/sshd_config
+  - sed -i 's/^#*\\s*PasswordAuthentication.*/PasswordAuthentication yes/' /etc/ssh/sshd_config
+  - >
+    for f in /etc/ssh/sshd_config.d/*.conf; do
+      [ -f "\$f" ] || continue;
+      sed -i 's/^#*\\s*PasswordAuthentication.*/PasswordAuthentication yes/' "\$f";
+      sed -i 's/^#*\\s*PermitRootLogin.*/PermitRootLogin yes/' "\$f";
+    done
+  - systemctl reload ssh || systemctl reload sshd || true
 ${FETCH_BLOCK}
   - echo "OpenClaw bootstrap launched. Tail /var/log/openclaw-install.log" > /etc/motd
 timezone: Asia/Ho_Chi_Minh

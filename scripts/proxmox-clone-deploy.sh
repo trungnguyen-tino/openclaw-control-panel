@@ -7,7 +7,9 @@
 #   bash <(curl -fsSL https://raw.githubusercontent.com/trungnguyen-tino/openclaw-control-panel/main/scripts/proxmox-clone-deploy.sh) \
 #     --template 9001 --vmid 207 --name openclaw-vm-7 \
 #     --domain 192.168.232.7 --ip 192.168.232.7/24 --gw 192.168.232.1 \
-#     --ssh-key ~/.ssh/id_ed25519.pub --theme ictsaigon
+#     --theme ictsaigon
+#
+# Root password defaults to ICTsaigon@#2026 — override with --root-pass 'NEW'.
 #
 # Prerequisites on Proxmox host:
 # - Template VM (e.g. 9001) created from Ubuntu 24.04 cloud image. The
@@ -30,7 +32,7 @@ NAME=""
 DOMAIN=""
 IP=""
 GATEWAY=""
-SSH_KEY=""
+ROOT_PASS="ICTsaigon@#2026"  # default — override with --root-pass
 THEME="default"
 GH_TOKEN=""            # optional — only set for private repo install source
 BRIDGE="vmbr0"
@@ -48,7 +50,7 @@ while [[ $# -gt 0 ]]; do
     --domain)     DOMAIN="$2"; shift 2 ;;
     --ip)         IP="$2"; shift 2 ;;
     --gw)         GATEWAY="$2"; shift 2 ;;
-    --ssh-key)    SSH_KEY="$2"; shift 2 ;;
+    --root-pass)  ROOT_PASS="$2"; shift 2 ;;
     --theme)      THEME="$2"; shift 2 ;;
     --gh-token)   GH_TOKEN="$2"; shift 2 ;;
     --bridge)     BRIDGE="$2"; shift 2 ;;
@@ -62,7 +64,7 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
-for v in TEMPLATE VMID NAME DOMAIN IP GATEWAY SSH_KEY; do
+for v in TEMPLATE VMID NAME DOMAIN IP GATEWAY ROOT_PASS; do
   [[ -z "${!v}" ]] && { echo "Missing --${v,,}" >&2; exit 1; }
 done
 
@@ -72,12 +74,6 @@ case "$THEME" in
 esac
 
 log() { printf '\033[1;36m[clone]\033[0m %s\n' "$*"; }
-
-# Resolve SSH key path (expand ~ manually since cloud-init snippet runs as a
-# different user without our shell).
-SSH_KEY_ABS=$(eval echo "$SSH_KEY")
-[[ -r "$SSH_KEY_ABS" ]] || { echo "SSH key not readable: $SSH_KEY_ABS" >&2; exit 1; }
-PUB_KEY=$(cat "$SSH_KEY_ABS")
 
 # Build the bootstrap fetch + run snippet. Public-repo path uses the stable
 # /releases/latest/download URL (no asset-ID lookup); private-repo path needs
@@ -124,8 +120,13 @@ cat > "$SNIPPET_PATH" <<EOF
 #cloud-config
 hostname: ${NAME}
 manage_etc_hosts: true
-ssh_authorized_keys:
-  - ${PUB_KEY}
+# Root password login (no SSH key). Disable cloud-init password expiry so the
+# fixed password works on first login.
+password: ${ROOT_PASS}
+chpasswd:
+  expire: false
+ssh_pwauth: true
+disable_root: false
 package_update: true
 packages: [curl, ca-certificates]
 runcmd:
@@ -143,8 +144,8 @@ qm set "$VMID" \
   --memory "$MEMORY" \
   --net0 "virtio,bridge=$BRIDGE" \
   --ipconfig0 "ip=$IP,gw=$GATEWAY" \
-  --sshkeys <(echo "$PUB_KEY") \
   --ciuser root \
+  --cipassword "$ROOT_PASS" \
   --cicustom "user=local:snippets/openclaw-${VMID}.yaml"
 
 log "Starting VM $VMID"

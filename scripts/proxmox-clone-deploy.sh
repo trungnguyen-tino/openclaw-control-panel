@@ -3,36 +3,24 @@
 #
 # Run ON THE PROXMOX HOST as root (or member of PVEAdmin).
 #
-# Usage:
-#   bash proxmox-clone-deploy.sh \
-#     --template 9000 \
-#     --vmid 200 \
-#     --name openclaw-prod \
-#     --domain openclaw.example.com \
-#     --ip 192.168.1.50/24 \
-#     --gw 192.168.1.1 \
-#     --ssh-key "~/.ssh/id_rsa.pub" \
-#     --gh-token ghp_xxx \
-#     [--bridge vmbr0] [--cores 2] [--memory 2048] [--disk-size 32G]
+# One-liner (public repo, no auth):
+#   bash <(curl -fsSL https://raw.githubusercontent.com/trungnguyen-tino/openclaw-control-panel/main/scripts/proxmox-clone-deploy.sh) \
+#     --template 9001 --vmid 207 --name openclaw-vm-7 \
+#     --domain 192.168.232.7 --ip 192.168.232.7/24 --gw 192.168.232.1 \
+#     --ssh-key ~/.ssh/id_ed25519.pub --theme ictsaigon
 #
 # Prerequisites on Proxmox host:
-# - Template VM (id e.g. 9000) created from Ubuntu 24.04 cloud image:
-#     wget https://cloud-images.ubuntu.com/noble/current/noble-server-cloudimg-amd64.img
-#     qm create 9000 --memory 2048 --net0 virtio,bridge=vmbr0 --name ubuntu-2404-template
-#     qm importdisk 9000 noble-server-cloudimg-amd64.img local-lvm
-#     qm set 9000 --scsihw virtio-scsi-pci --scsi0 local-lvm:vm-9000-disk-0
-#     qm set 9000 --ide2 local-lvm:cloudinit
-#     qm set 9000 --boot c --bootdisk scsi0
-#     qm set 9000 --serial0 socket --vga serial0
-#     qm set 9000 --agent enabled=1
-#     qm template 9000
+# - Template VM (e.g. 9001) created from Ubuntu 24.04 cloud image. The
+#   community helper script does this in one go:
+#     bash -c "$(curl -fsSL https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/vm/ubuntu2404-vm.sh)"
+#   then `qm template <id>`.
 #
 # What this script does:
-# 1. qm clone <template> <vmid>
-# 2. Generate per-VM cloud-init user-data from snippet template
-# 3. qm set --cicustom + --ipconfig0 + --sshkey + --ciuser
+# 1. qm clone <template> <vmid> --full
+# 2. Generate per-VM cloud-init snippet that auto-runs bootstrap.sh
+# 3. qm set --cicustom + --ipconfig0 + --sshkeys + --ciuser
 # 4. qm start <vmid>
-# 5. Wait for SSH + tail /var/log/openclaw-install.log
+# 5. Print SSH command to tail install log
 
 set -euo pipefail
 
@@ -43,11 +31,14 @@ DOMAIN=""
 IP=""
 GATEWAY=""
 SSH_KEY=""
-GH_TOKEN=""
+THEME="default"
+GH_TOKEN=""            # optional — only set for private repo install source
 BRIDGE="vmbr0"
 CORES="2"
-MEMORY="2048"
+MEMORY="4096"
 DISK_SIZE="32G"
+REPO="trungnguyen-tino/openclaw-control-panel"
+EXTRA_INSTALL_FLAGS="--no-firewall --skip-chrome --force"
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -58,34 +49,76 @@ while [[ $# -gt 0 ]]; do
     --ip)         IP="$2"; shift 2 ;;
     --gw)         GATEWAY="$2"; shift 2 ;;
     --ssh-key)    SSH_KEY="$2"; shift 2 ;;
+    --theme)      THEME="$2"; shift 2 ;;
     --gh-token)   GH_TOKEN="$2"; shift 2 ;;
     --bridge)     BRIDGE="$2"; shift 2 ;;
     --cores)      CORES="$2"; shift 2 ;;
     --memory)     MEMORY="$2"; shift 2 ;;
     --disk-size)  DISK_SIZE="$2"; shift 2 ;;
+    --repo)       REPO="$2"; shift 2 ;;
+    --extra)      EXTRA_INSTALL_FLAGS="$2"; shift 2 ;;
+    -h|--help)    sed -n '2,20p' "$0"; exit 0 ;;
     *) echo "Unknown flag: $1" >&2; exit 1 ;;
   esac
 done
 
-for v in TEMPLATE VMID NAME DOMAIN IP GATEWAY SSH_KEY GH_TOKEN; do
+for v in TEMPLATE VMID NAME DOMAIN IP GATEWAY SSH_KEY; do
   [[ -z "${!v}" ]] && { echo "Missing --${v,,}" >&2; exit 1; }
 done
 
+case "$THEME" in
+  default|ictsaigon) ;;
+  *) echo "--theme must be default | ictsaigon (got: $THEME)" >&2; exit 1 ;;
+esac
+
 log() { printf '\033[1;36m[clone]\033[0m %s\n' "$*"; }
 
-# Resolve current bootstrap asset ID from GitHub (auto-update for new releases).
-log "Fetching bootstrap asset ID from GitHub..."
-BOOTSTRAP_ID=$(curl -fsSL \
-  -H "Authorization: token $GH_TOKEN" \
-  "https://api.github.com/repos/trungnguyen-tino/openclaw-control-panel/releases/latest" \
-  | grep -A 4 '"name": "bootstrap.sh"' | grep '"id":' | head -1 | grep -oE '[0-9]+')
-[[ -z "$BOOTSTRAP_ID" ]] && { echo "Failed to resolve bootstrap.sh asset ID" >&2; exit 1; }
-log "BOOTSTRAP_ID=$BOOTSTRAP_ID"
+# Resolve SSH key path (expand ~ manually since cloud-init snippet runs as a
+# different user without our shell).
+SSH_KEY_ABS=$(eval echo "$SSH_KEY")
+[[ -r "$SSH_KEY_ABS" ]] || { echo "SSH key not readable: $SSH_KEY_ABS" >&2; exit 1; }
+PUB_KEY=$(cat "$SSH_KEY_ABS")
 
-# Generate per-VM cloud-init snippet.
+# Build the bootstrap fetch + run snippet. Public-repo path uses the stable
+# /releases/latest/download URL (no asset-ID lookup); private-repo path needs
+# a PAT to resolve the bootstrap asset id from the GitHub API.
+if [[ -n "$GH_TOKEN" ]]; then
+  log "Private-repo mode — resolving bootstrap asset ID with PAT"
+  BOOTSTRAP_ID=$(curl -fsSL \
+    -H "Authorization: token $GH_TOKEN" \
+    "https://api.github.com/repos/$REPO/releases/latest" \
+    | python3 -c "import json,sys; r=json.load(sys.stdin); print(next(a['id'] for a in r['assets'] if a['name']=='bootstrap.sh'))")
+  FETCH_BLOCK=$(cat <<EOFETCH
+  - export GH_TOKEN='${GH_TOKEN}'
+  - >
+    curl -fsSL
+    -H "Authorization: token \$GH_TOKEN"
+    -H "Accept: application/octet-stream"
+    -o /tmp/bootstrap.sh
+    "https://api.github.com/repos/${REPO}/releases/assets/${BOOTSTRAP_ID}"
+  - chmod +x /tmp/bootstrap.sh
+  - >
+    setsid bash -c "GH_TOKEN='\$GH_TOKEN' bash /tmp/bootstrap.sh
+    --domain ${DOMAIN} --theme ${THEME} ${EXTRA_INSTALL_FLAGS}
+    > /var/log/openclaw-install.log 2>&1" &
+EOFETCH
+)
+else
+  log "Public-repo mode — using /releases/latest/download (no auth)"
+  FETCH_BLOCK=$(cat <<EOFETCH
+  - >
+    curl -fsSL -o /tmp/bootstrap.sh
+    "https://github.com/${REPO}/releases/latest/download/bootstrap.sh"
+  - chmod +x /tmp/bootstrap.sh
+  - >
+    setsid bash -c "bash /tmp/bootstrap.sh
+    --domain ${DOMAIN} --theme ${THEME} ${EXTRA_INSTALL_FLAGS}
+    > /var/log/openclaw-install.log 2>&1" &
+EOFETCH
+)
+fi
+
 SNIPPET_PATH="/var/lib/vz/snippets/openclaw-${VMID}.yaml"
-PUB_KEY=$(cat "$SSH_KEY")
-
 log "Writing cloud-init snippet: $SNIPPET_PATH"
 cat > "$SNIPPET_PATH" <<EOF
 #cloud-config
@@ -96,18 +129,7 @@ ssh_authorized_keys:
 package_update: true
 packages: [curl, ca-certificates]
 runcmd:
-  - export GH_TOKEN='${GH_TOKEN}'
-  - >
-    curl -fsSL
-    -H "Authorization: token \$GH_TOKEN"
-    -H "Accept: application/octet-stream"
-    -o /tmp/bootstrap.sh
-    "https://api.github.com/repos/trungnguyen-tino/openclaw-control-panel/releases/assets/${BOOTSTRAP_ID}"
-  - chmod +x /tmp/bootstrap.sh
-  - >
-    setsid bash -c "GH_TOKEN='\$GH_TOKEN' bash /tmp/bootstrap.sh
-    --domain ${DOMAIN} --no-firewall --skip-chrome --force
-    > /var/log/openclaw-install.log 2>&1" &
+${FETCH_BLOCK}
   - echo "OpenClaw bootstrap launched. Tail /var/log/openclaw-install.log" > /etc/motd
 timezone: Asia/Ho_Chi_Minh
 EOF
@@ -128,6 +150,7 @@ qm set "$VMID" \
 log "Starting VM $VMID"
 qm start "$VMID"
 
-log "Done. Watch progress with:"
-echo "  ssh root@${IP%/*} 'tail -f /var/log/openclaw-install.log'"
-echo "  Panel will be at: https://${DOMAIN}/"
+IP_ONLY="${IP%/*}"
+log "Done. Watch install progress:"
+echo "  ssh root@${IP_ONLY} 'tail -f /var/log/openclaw-install.log'"
+echo "  Panel will be at: https://${DOMAIN}/   (theme=${THEME})"

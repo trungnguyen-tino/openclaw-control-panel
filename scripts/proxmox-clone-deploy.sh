@@ -114,6 +114,16 @@ EOFETCH
 )
 fi
 
+# Ensure 'local' storage allows snippets content + the snippets directory
+# exists. Fresh Proxmox installs don't enable snippets on 'local' by default,
+# and the /var/lib/vz/snippets/ directory is created lazily.
+if ! pvesm status -content snippets 2>/dev/null | awk 'NR>1{print $1}' | grep -qx local; then
+  log "Enabling 'snippets' content on storage 'local'"
+  CURRENT_CONTENT=$(pvesm status -storage local | awk 'NR>1{print $2}' | head -1)
+  pvesm set local --content "iso,vztmpl,backup,snippets" || true
+fi
+mkdir -p /var/lib/vz/snippets
+
 SNIPPET_PATH="/var/lib/vz/snippets/openclaw-${VMID}.yaml"
 log "Writing cloud-init snippet: $SNIPPET_PATH"
 cat > "$SNIPPET_PATH" <<EOF

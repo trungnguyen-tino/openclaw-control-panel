@@ -33,6 +33,9 @@ _INSTALL_ROOT = Path("/opt/openclaw-mgmt")
 _NEW_DIR = _INSTALL_ROOT / ".new"
 _OLD_DIR = _INSTALL_ROOT / ".old"
 _LOG_DIR = Path("/var/log/openclaw-mgmt")
+_OPENCLAW_HOME = Path("/opt/openclaw")
+_SYSTEMD_DIR = Path("/etc/systemd/system")
+_USR_LOCAL_BIN = Path("/usr/local/bin")
 
 
 def _url_for(tag: str) -> str:
@@ -99,6 +102,96 @@ def _swap(new: Path, current: Path, archive_root: Path) -> None:
     shutil.move(str(new), str(current))
 
 
+def _copy_if_different(src: Path, dst: Path, mode: int = 0o644) -> bool:
+    """Copy `src` → `dst` only if content differs. Returns True if copied."""
+    if not src.exists():
+        return False
+    if dst.exists() and src.read_bytes() == dst.read_bytes():
+        return False
+    dst.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copy2(src, dst)
+    dst.chmod(mode)
+    return True
+
+
+def migrate_infra(staged: Path) -> dict[str, bool]:
+    """Retro-fix legacy VPS infra on every self-update.
+
+    Re-applies files outside `/opt/openclaw-mgmt/` that bug-fix releases need
+    to land on existing VPS (not just fresh installs). Each step is idempotent
+    via content compare — no-op when already current.
+
+    Surfaces migrated:
+      - /opt/openclaw/Caddyfile             ← app/caddy/Caddyfile.template
+      - /etc/systemd/system/caddy.service.d/override.conf
+      - /etc/systemd/system/openclaw-healthcheck.{service,timer}
+      - /usr/local/bin/openclaw-healthcheck.sh
+      - /usr/local/bin/openclaw-sync-auth-profiles.sh
+      - /usr/local/bin/openclaw-config-enforce.sh
+
+    Caller must run systemctl daemon-reload + reload caddy after if changes!=0.
+    Returns dict of {filename: changed?} for logging.
+    """
+    changed: dict[str, bool] = {}
+    # 1. Caddyfile — preserve user customisations if they marked the file with
+    # `# panel-managed: false` comment, else overwrite.
+    caddyfile_dst = _OPENCLAW_HOME / "Caddyfile"
+    caddyfile_src = staged / "app" / "caddy" / "Caddyfile.template"
+    if caddyfile_dst.exists() and "# panel-managed: false" in caddyfile_dst.read_text(
+        encoding="utf-8", errors="replace"
+    ):
+        log.info("Caddyfile has 'panel-managed: false' marker — skipping")
+        changed["Caddyfile"] = False
+    else:
+        # Back up before overwrite — first time, keep a recovery copy.
+        if caddyfile_dst.exists():
+            backup = caddyfile_dst.with_suffix(".bak-pre-migrate")
+            if not backup.exists():
+                shutil.copy2(caddyfile_dst, backup)
+        changed["Caddyfile"] = _copy_if_different(caddyfile_src, caddyfile_dst, 0o644)
+
+    # 2. Systemd drop-ins.
+    for unit in ("caddy-override.conf",):
+        src = staged / "systemd" / unit
+        dst = _SYSTEMD_DIR / "caddy.service.d" / "override.conf"
+        changed[f"systemd/{unit}"] = _copy_if_different(src, dst, 0o644)
+
+    # 3. Healthcheck timer + service.
+    for unit in ("openclaw-healthcheck.service", "openclaw-healthcheck.timer"):
+        src = staged / "systemd" / unit
+        dst = _SYSTEMD_DIR / unit
+        changed[f"systemd/{unit}"] = _copy_if_different(src, dst, 0o644)
+
+    # 4. Helper scripts (executable).
+    for script in (
+        "openclaw-healthcheck.sh",
+        "openclaw-sync-auth-profiles.sh",
+        "openclaw-config-enforce.sh",
+    ):
+        src = staged / "scripts" / script
+        dst = _USR_LOCAL_BIN / script
+        changed[f"scripts/{script}"] = _copy_if_different(src, dst, 0o755)
+
+    return changed
+
+
+def _validate_invariants() -> list[str]:
+    """Check post-migrate invariants. Returns list of failure messages."""
+    failures: list[str] = []
+    caddyfile = _OPENCLAW_HOME / "Caddyfile"
+    if caddyfile.exists():
+        content = caddyfile.read_text(encoding="utf-8", errors="replace")
+        if "auto_https disable_redirects" not in content:
+            failures.append("Caddyfile missing 'auto_https disable_redirects' block")
+        if "/gw" not in content:
+            failures.append("Caddyfile missing /gw route")
+    auth_py = _INSTALL_ROOT / "app" / "auth.py"
+    if auth_py.exists():
+        if 'request.args.get("auth")' not in auth_py.read_text(encoding="utf-8"):
+            failures.append("auth.py missing ?auth= query fallback (SSE will 401)")
+    return failures
+
+
 def run(tag: str) -> None:
     """Synchronous worker — call inside a daemon thread."""
     _LOG_DIR.mkdir(parents=True, exist_ok=True)
@@ -118,11 +211,30 @@ def run(tag: str) -> None:
             return
         _extract(tarball, _NEW_DIR)
         tarball.unlink(missing_ok=True)
+        # Migrate infra (Caddyfile, systemd, scripts) from the staged tree
+        # BEFORE we move it on top of /opt/openclaw-mgmt/. Reads from .new/,
+        # writes to /opt/openclaw/, /etc/systemd/, /usr/local/bin/.
+        migrated = migrate_infra(_NEW_DIR)
+        changed_count = sum(1 for v in migrated.values() if v)
+        log.info("infra migration: changed=%d details=%s", changed_count, migrated)
+        if changed_count:
+            # Reload caddy + daemon-reload happen via subprocess; safe to skip
+            # errors so a stale caddy doesn't block the panel update.
+            import subprocess
+
+            subprocess.run(["systemctl", "daemon-reload"], check=False)
+            subprocess.run(["systemctl", "reload-or-restart", "caddy"], check=False)
+            log.info("caddy reloaded after infra migration")
         # NB: don't replace the CURRENT process binary while running. Drop a
         # sentinel; a deployment hook (or systemd ExecStartPre) does the swap
         # before the next start.
         current = _INSTALL_ROOT / "current"
         _swap(_NEW_DIR, current, _OLD_DIR)
+        failures = _validate_invariants()
+        if failures:
+            log.warning("post-update invariants failed: %s", failures)
+        else:
+            log.info("post-update invariants OK")
         log.info("swap complete — restarting service")
         ok, msg = restart("openclaw-mgmt")
         log.info("restart ok=%s msg=%s", ok, msg)

@@ -61,17 +61,20 @@ rm -rf "$STAGE"
 # Copy bootstrap + installer as standalone assets for one-liner usability.
 cp install.sh "$DIST/install.sh"
 cp scripts/bootstrap.sh "$DIST/bootstrap.sh"
+cp scripts/bootstrap-fix.sh "$DIST/bootstrap-fix.sh"
 
 # Create or update release.
 if gh release view "$TAG" -R "$REPO" >/dev/null 2>&1; then
   echo "[release] Updating existing release $TAG"
   gh release upload "$TAG" \
-    "$TARBALL" "${TARBALL}.sha256" "$DIST/install.sh" "$DIST/bootstrap.sh" \
+    "$TARBALL" "${TARBALL}.sha256" \
+    "$DIST/install.sh" "$DIST/bootstrap.sh" "$DIST/bootstrap-fix.sh" \
     -R "$REPO" --clobber
 else
   echo "[release] Creating release $TAG"
   gh release create "$TAG" \
-    "$TARBALL" "${TARBALL}.sha256" "$DIST/install.sh" "$DIST/bootstrap.sh" \
+    "$TARBALL" "${TARBALL}.sha256" \
+    "$DIST/install.sh" "$DIST/bootstrap.sh" "$DIST/bootstrap-fix.sh" \
     -R "$REPO" --title "OpenClaw Panel $TAG" --notes "$NOTES"
 fi
 

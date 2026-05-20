@@ -205,7 +205,7 @@ export function TerminalPage() {
           <span className="size-2.5 rounded-full bg-yellow-500/80" />
           <span className="size-2.5 rounded-full bg-green-500/80" />
           <span className="ml-2 text-[11px] text-zinc-400">
-            openclaw.trunglab.com — bash {busy && <span className="text-yellow-400">· running…</span>}
+            {window.location.hostname} — bash {busy && <span className="text-yellow-400">· running…</span>}
           </span>
         </div>
 

@@ -26,9 +26,7 @@ def test_login_returns_mgmt_api_key(client, tmp_openclaw_home: Path) -> None:  #
         f"OPENCLAW_LOGIN_PASS={pw_hash}\n"
         f"OPENCLAW_GATEWAY_TOKEN={'g'*64}\n"
     )
-    r = client.post(
-        "/api/auth/login", json={"username": "admin", "password": "hunter2"}
-    )
+    r = client.post("/api/auth/login", json={"username": "admin", "password": "hunter2"})
     assert r.status_code == 200
     body = r.get_json()
     assert body["ok"] is True

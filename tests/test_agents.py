@@ -62,9 +62,7 @@ def test_agent_api_key_writes_auth_profiles(
         headers=h,
     )
     assert r.status_code == 200
-    auth_file = (
-        tmp_openclaw_home / "config" / "agents" / "alpha" / "agent" / "auth-profiles.json"
-    )
+    auth_file = tmp_openclaw_home / "config" / "agents" / "alpha" / "agent" / "auth-profiles.json"
     data = json.loads(auth_file.read_text())
     assert "anthropic:manual" in data["profiles"]
     assert data["profiles"]["anthropic:manual"]["key"] == "sk-ant-xxxx"

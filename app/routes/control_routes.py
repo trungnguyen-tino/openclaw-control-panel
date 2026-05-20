@@ -105,11 +105,11 @@ def _run_upgrade_in_background(version: str = "latest") -> None:
             log.info("npm stderr=%s", r.stderr[-1024:])
         # Sync .env to the actual installed semver so openclaw Control UI sees
         # a real version (not the placeholder "latest" string).
-        version = _detect_openclaw_version()
-        if version:
+        detected = _detect_openclaw_version()
+        if detected:
             try:
-                dotenv_set("OPENCLAW_VERSION", version)
-                log.info("synced .env OPENCLAW_VERSION=%s", version)
+                dotenv_set("OPENCLAW_VERSION", detected)
+                log.info("synced .env OPENCLAW_VERSION=%s", detected)
             except Exception as e:  # noqa: BLE001
                 log.warning("failed to sync .env version: %s", e)
         ok, msg = systemd_service.restart("openclaw")
@@ -138,10 +138,7 @@ def get_upgrade_versions():  # type: ignore[no-untyped-def]
         if not isinstance(raw, list):
             raw = [raw]
         # npm returns chronological ascending; reverse for newest-first.
-        items = [
-            {"version": v, "isBeta": "-" in v.split("+", 1)[0]}
-            for v in reversed(raw)
-        ]
+        items = [{"version": v, "isBeta": "-" in v.split("+", 1)[0]} for v in reversed(raw)]
         return jsonify({"ok": True, "versions": items})
     except Exception as exc:  # noqa: BLE001
         log.warning("upgrade versions probe failed: %s", exc)
@@ -156,9 +153,7 @@ def post_upgrade():  # type: ignore[no-untyped-def]
     version = str(body.get("version", "latest")).strip() or "latest"
     if not _VERSION_PATTERN.match(version):
         return jsonify({"ok": False, "error": "invalid version"}), 400
-    threading.Thread(
-        target=_run_upgrade_in_background, args=(version,), daemon=True
-    ).start()
+    threading.Thread(target=_run_upgrade_in_background, args=(version,), daemon=True).start()
     return (
         jsonify({"ok": True, "action": "upgrade", "started": True, "version": version}),
         202,
@@ -175,7 +170,7 @@ def post_reset():  # type: ignore[no-untyped-def]
             jsonify(
                 {
                     "ok": False,
-                    "error": "Missing or wrong confirmation. Send {\"confirm\":\"RESET\"}.",
+                    "error": 'Missing or wrong confirmation. Send {"confirm":"RESET"}.',
                 }
             ),
             400,

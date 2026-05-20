@@ -59,9 +59,7 @@ PATHS = Paths.from_env()
 
 # OAuth Codex — matches source line 731 hardcoded client ID; env override
 # allows ops to point at a different OpenAI client without code change.
-OPENAI_CODEX_CLIENT_ID = os.environ.get(
-    "OPENAI_CODEX_CLIENT_ID", "app_EMoamEEZ73f0CkXaXp7hrann"
-)
+OPENAI_CODEX_CLIENT_ID = os.environ.get("OPENAI_CODEX_CLIENT_ID", "app_EMoamEEZ73f0CkXaXp7hrann")
 OPENAI_CODEX_ISSUER = os.environ.get("OPENAI_CODEX_ISSUER", "https://auth.openai.com")
 
 # Rate-limit thresholds (matches source line 81-83).

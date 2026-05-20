@@ -208,7 +208,11 @@ def refresh_profile(agent_id: str, profile_key: str) -> bool:
         log.warning("oauth.refresh network agent=%s key=%s err=%s", agent_id, profile_key, e)
         return False
     if resp.status_code != 200:
-        body = resp.json() if resp.headers.get("Content-Type", "").startswith("application/json") else {}
+        body = (
+            resp.json()
+            if resp.headers.get("Content-Type", "").startswith("application/json")
+            else {}
+        )
         if body.get("error") == "invalid_grant":
             prof["dead"] = True
             prof["deadReason"] = "invalid_grant"

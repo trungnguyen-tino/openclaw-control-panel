@@ -126,7 +126,9 @@ def _build_custom_template(
     return {
         "agents": {
             "defaults": {
-                "model": {"primary": openclaw_config_service.compose_primary(provider_id, model_id)},
+                "model": {
+                    "primary": openclaw_config_service.compose_primary(provider_id, model_id)
+                },
                 "maxConcurrent": 4,
                 "subagents": {"maxConcurrent": 8},
             }
@@ -203,7 +205,8 @@ def list_custom_providers():  # type: ignore[no-untyped-def]
             continue
         try:
             tpl = json.loads(f.read_text(encoding="utf-8"))
-        except Exception:  # noqa: BLE001, S112 — skip malformed custom-provider files; not fatal for the listing
+        # Skip malformed custom-provider files; not fatal for the listing.
+        except Exception:  # noqa: BLE001, S112
             continue
         provider_cfg = tpl.get("models", {}).get("providers", {}).get(f.stem, {})
         out.append(
@@ -236,7 +239,9 @@ def put_custom_provider(provider: str):  # type: ignore[no-untyped-def]
     if "model" in body:
         pcfg["models"] = [{"id": body["model"], "name": body.get("modelName", body["model"])}]
         tpl.setdefault("agents", {}).setdefault("defaults", {}).setdefault("model", {})
-        tpl["agents"]["defaults"]["model"]["primary"] = openclaw_config_service.compose_primary(provider, body["model"])
+        tpl["agents"]["defaults"]["model"]["primary"] = openclaw_config_service.compose_primary(
+            provider, body["model"]
+        )
     path.write_text(json.dumps(tpl, indent=2), encoding="utf-8")
     if body.get("apiKey"):
         provider_service.set_api_key(provider, str(body["apiKey"]))

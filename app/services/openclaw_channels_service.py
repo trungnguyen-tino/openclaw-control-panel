@@ -48,7 +48,12 @@ SUPPORTED_CHANNELS: Final[dict[str, dict[str, Any]]] = {
         "label": "Slack",
         "fields": [
             {"key": "token", "cli": "--token", "label": "Bot Token (xoxb-)", "secret": True},
-            {"key": "app_token", "cli": "--app-token", "label": "App Token (xapp-)", "secret": True},
+            {
+                "key": "app_token",
+                "cli": "--app-token",
+                "label": "App Token (xapp-)",
+                "secret": True,
+            },
             {"key": "name", "cli": "--name", "label": "Tên hiển thị", "secret": False},
         ],
     },
@@ -63,9 +68,24 @@ SUPPORTED_CHANNELS: Final[dict[str, dict[str, Any]]] = {
     "matrix": {
         "label": "Matrix",
         "fields": [
-            {"key": "homeserver", "cli": "--homeserver", "label": "Homeserver URL", "secret": False},
-            {"key": "user_id", "cli": "--user-id", "label": "User ID (@you:server)", "secret": False},
-            {"key": "access_token", "cli": "--access-token", "label": "Access Token", "secret": True},
+            {
+                "key": "homeserver",
+                "cli": "--homeserver",
+                "label": "Homeserver URL",
+                "secret": False,
+            },
+            {
+                "key": "user_id",
+                "cli": "--user-id",
+                "label": "User ID (@you:server)",
+                "secret": False,
+            },
+            {
+                "key": "access_token",
+                "cli": "--access-token",
+                "label": "Access Token",
+                "secret": True,
+            },
             {"key": "device_name", "cli": "--device-name", "label": "Device Name", "secret": False},
             {"key": "name", "cli": "--name", "label": "Tên hiển thị", "secret": False},
         ],

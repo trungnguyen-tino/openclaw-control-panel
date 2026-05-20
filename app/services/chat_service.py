@@ -20,7 +20,9 @@ _OPENCLAW_BIN = "/usr/bin/openclaw"
 _DEFAULT_TIMEOUT_S = 120.0
 
 
-def one_shot(prompt: str, model: str | None = None, timeout: float = _DEFAULT_TIMEOUT_S) -> dict[str, Any]:
+def one_shot(
+    prompt: str, model: str | None = None, timeout: float = _DEFAULT_TIMEOUT_S
+) -> dict[str, Any]:
     """Run a single inference turn against the active provider/model.
 
     Args:

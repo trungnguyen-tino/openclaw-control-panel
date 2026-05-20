@@ -48,7 +48,8 @@ def register_extensions(app: Flask) -> None:
             from app.services.oauth_refresher_thread import start_once
 
             start_once()
-        except Exception:  # noqa: BLE001, S110 — best-effort startup; refresher failure must not block app boot
+        # Best-effort startup; refresher failure must not block app boot.
+        except Exception:  # noqa: BLE001, S110
             pass
 
 
@@ -155,12 +156,8 @@ def register_cors(app: Flask) -> None:
         # SPA is same-origin; we don't need credentialed CORS. `*` is safe
         # because no endpoint relies on cookies — Bearer must be set explicitly.
         response.headers["Access-Control-Allow-Origin"] = "*"
-        response.headers["Access-Control-Allow-Methods"] = (
-            "GET, POST, PUT, DELETE, OPTIONS"
-        )
-        response.headers["Access-Control-Allow-Headers"] = (
-            "Authorization, Content-Type"
-        )
+        response.headers["Access-Control-Allow-Methods"] = "GET, POST, PUT, DELETE, OPTIONS"
+        response.headers["Access-Control-Allow-Headers"] = "Authorization, Content-Type"
         # CSP: lock asset sources to same-origin. `unsafe-inline` for styles
         # needed by Tailwind's runtime classes; can be tightened post-MVP via
         # nonces if we drop Tailwind's JIT inline styles.
@@ -203,9 +200,7 @@ def register_spa_fallback(app: Flask) -> None:
             theme = os.environ.get("OPENCLAW_THEME", "default")
             if theme not in valid_themes:
                 theme = "default"
-            html = index.read_text(encoding="utf-8").replace(
-                "__OPENCLAW_THEME__", theme
-            )
+            html = index.read_text(encoding="utf-8").replace("__OPENCLAW_THEME__", theme)
             return html, 200, {"Content-Type": "text/html; charset=utf-8"}
         return (
             "<h1>OpenClaw Panel</h1><p>SPA not built. Run <code>make build-ui</code>.</p>",

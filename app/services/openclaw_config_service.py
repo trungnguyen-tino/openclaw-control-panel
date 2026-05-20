@@ -78,7 +78,11 @@ def merge_template(
     merged["agents"]["defaults"]["model"]["primary"] = compose_primary(provider, model)
     # Carry over any models.providers blocks already configured for OTHER providers
     # so the user can keep multi-provider routing alive.
-    cur_models = current.get("models", {}).get("providers", {}) if isinstance(current.get("models"), dict) else {}
+    cur_models = (
+        current.get("models", {}).get("providers", {})
+        if isinstance(current.get("models"), dict)
+        else {}
+    )
     if cur_models:
         merged.setdefault("models", {}).setdefault("providers", {})
         for other_id, other_cfg in cur_models.items():
@@ -94,19 +98,14 @@ def compose_primary(provider: str, model: str) -> str:
     — returns the canonical single-prefix form either way.
     """
     prefix = f"{provider}/"
-    bare = model[len(prefix):] if model.startswith(prefix) else model
+    bare = model[len(prefix) :] if model.startswith(prefix) else model
     return f"{provider}/{bare}"
 
 
 def get_active_provider_model(cfg: dict[str, Any] | None = None) -> tuple[str | None, str | None]:
     """Inspect `agents.defaults.model.primary` like `groq/llama-3.3` → (provider, model)."""
     data = cfg if cfg is not None else read()
-    primary = (
-        data.get("agents", {})
-        .get("defaults", {})
-        .get("model", {})
-        .get("primary", "")
-    )
+    primary = data.get("agents", {}).get("defaults", {}).get("model", {}).get("primary", "")
     if "/" in primary:
         provider, _, model = primary.partition("/")
         return provider or None, model or None

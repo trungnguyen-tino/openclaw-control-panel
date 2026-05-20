@@ -24,12 +24,19 @@ def test_s256_challenge_matches_rfc7636() -> None:
 
 def test_build_authorize_url_contains_required_params() -> None:
     url = pkce_service.build_authorize_url("state-x", "chal-y")
-    for must in ("response_type=code", "code_challenge=chal-y", "state=state-x", "code_challenge_method=S256"):
+    for must in (
+        "response_type=code",
+        "code_challenge=chal-y",
+        "state=state-x",
+        "code_challenge_method=S256",
+    ):
         assert must in url
 
 
 def test_extract_code_handles_full_redirect_url() -> None:
-    code = pkce_service.extract_code_from_redirect("http://localhost:1455/auth/callback?code=ABC&state=X")
+    code = pkce_service.extract_code_from_redirect(
+        "http://localhost:1455/auth/callback?code=ABC&state=X"
+    )
     assert code == "ABC"
 
 
@@ -55,7 +62,9 @@ def test_session_expires_after_ttl(monkeypatch: pytest.MonkeyPatch) -> None:
     info = oauth_codex_service.start_session("agentX")
     # Force expiry: monkeypatch _now_ms.
     monkeypatch.setattr(
-        oauth_codex_service, "_now_ms", lambda: time.time() * 1000 + oauth_codex_service.SESSION_TTL_MS + 1000
+        oauth_codex_service,
+        "_now_ms",
+        lambda: time.time() * 1000 + oauth_codex_service.SESSION_TTL_MS + 1000,
     )
     assert oauth_codex_service._store.pop(info["sessionId"]) is None
 
@@ -65,9 +74,11 @@ def test_session_expires_after_ttl(monkeypatch: pytest.MonkeyPatch) -> None:
 
 def _fake_id_token(email: str, sub: str = "user-1") -> str:
     header = base64.urlsafe_b64encode(b'{"alg":"none"}').rstrip(b"=").decode()
-    payload = base64.urlsafe_b64encode(
-        json.dumps({"email": email, "sub": sub}).encode()
-    ).rstrip(b"=").decode()
+    payload = (
+        base64.urlsafe_b64encode(json.dumps({"email": email, "sub": sub}).encode())
+        .rstrip(b"=")
+        .decode()
+    )
     return f"{header}.{payload}."
 
 
@@ -95,7 +106,9 @@ def test_complete_session_writes_oauth_profile(
     result = oauth_codex_service.complete_session(sid, "code=ABC&state=" + sid)
     assert result["ok"] is True
     assert result["email"] == "alice@example.com"
-    profile_path = tmp_openclaw_home / "config" / "agents" / "alpha" / "agent" / "auth-profiles.json"
+    profile_path = (
+        tmp_openclaw_home / "config" / "agents" / "alpha" / "agent" / "auth-profiles.json"
+    )
     data = json.loads(profile_path.read_text())
     prof = data["profiles"]["openai-codex:alice@example.com"]
     assert prof["access"] == "access-xyz"
@@ -133,9 +146,7 @@ def test_refresh_profile_updates_token(
     mock_resp = Mock()
     mock_resp.status_code = 200
     mock_resp.json.return_value = {"access_token": "new-access", "expires_in": 3600}
-    monkeypatch.setattr(
-        oauth_codex_service.requests, "post", lambda *a, **kw: mock_resp
-    )
+    monkeypatch.setattr(oauth_codex_service.requests, "post", lambda *a, **kw: mock_resp)
     ok = oauth_codex_service.refresh_profile(agent_id, "openai-codex:bob@example.com")
     assert ok is True
     profiles = auth_profiles_service.list_profiles(agent_id)
@@ -164,9 +175,7 @@ def test_refresh_marks_invalid_grant_dead(
     mock_resp.status_code = 400
     mock_resp.headers = {"Content-Type": "application/json"}
     mock_resp.json.return_value = {"error": "invalid_grant"}
-    monkeypatch.setattr(
-        oauth_codex_service.requests, "post", lambda *a, **kw: mock_resp
-    )
+    monkeypatch.setattr(oauth_codex_service.requests, "post", lambda *a, **kw: mock_resp)
     ok = oauth_codex_service.refresh_profile(agent_id, "openai-codex:eve@example.com")
     assert ok is False
     profiles = auth_profiles_service.list_profiles(agent_id)

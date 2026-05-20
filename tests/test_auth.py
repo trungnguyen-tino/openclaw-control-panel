@@ -95,9 +95,7 @@ def test_bearer_missing_returns_401(tmp_openclaw_home: Path) -> None:
 def test_bearer_correct_returns_200(tmp_openclaw_home: Path) -> None:
     key = "a" * 64
     app = _make_app_with_protected_route(key, tmp_openclaw_home)
-    r = app.test_client().get(
-        "/api/protected", headers={"Authorization": f"Bearer {key}"}
-    )
+    r = app.test_client().get("/api/protected", headers={"Authorization": f"Bearer {key}"})
     assert r.status_code == 200
     assert r.get_json()["ok"] is True
 
@@ -146,7 +144,5 @@ def test_503_when_mgmt_key_missing(tmp_openclaw_home: Path) -> None:
         return {"ok": True}
 
     flask_app.register_blueprint(bp)
-    r = flask_app.test_client().get(
-        "/api/needs-key", headers={"Authorization": "Bearer x"}
-    )
+    r = flask_app.test_client().get("/api/needs-key", headers={"Authorization": "Bearer x"})
     assert r.status_code == 503

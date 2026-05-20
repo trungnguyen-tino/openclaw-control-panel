@@ -62,7 +62,9 @@ def delete_api_key(provider: str, agent_id: str | None = None) -> tuple[bool, st
         from app.services import agent_service
 
         return agent_service.delete_agent_api_key(agent_id, provider)
-    env_key = known_models.env_key_for(provider) or f"CUSTOM_{provider.upper().replace('-', '_')}_API_KEY"
+    env_key = (
+        known_models.env_key_for(provider) or f"CUSTOM_{provider.upper().replace('-', '_')}_API_KEY"
+    )
     dotenv_unset(env_key)
     return True, env_key
 
@@ -76,17 +78,26 @@ def _oauth_profile_for(provider_id: str) -> dict[str, Any] | None:
 
     cfg = openclaw_config_service.read()
     agent_list = (cfg.get("agents", {}) or {}).get("list", []) or []
-    default_agent = next((a.get("id") for a in agent_list if a.get("default")), None) \
-        or (agent_list[0].get("id") if agent_list else "main")
+    default_agent = next((a.get("id") for a in agent_list if a.get("default")), None) or (
+        agent_list[0].get("id") if agent_list else "main"
+    )
     profiles = auth_profiles_service.list_profiles(default_agent) or {}
     for _key, prof in profiles.items():
-        if isinstance(prof, dict) and prof.get("provider") == provider_id and prof.get("type") == "oauth":
+        if (
+            isinstance(prof, dict)
+            and prof.get("provider") == provider_id
+            and prof.get("type") == "oauth"
+        ):
             return prof
     # Fallback to scanning legacy "default" agent (panels created before agents.list init).
     if default_agent != "default":
         legacy = auth_profiles_service.list_profiles("default") or {}
         for _key, prof in legacy.items():
-            if isinstance(prof, dict) and prof.get("provider") == provider_id and prof.get("type") == "oauth":
+            if (
+                isinstance(prof, dict)
+                and prof.get("provider") == provider_id
+                and prof.get("type") == "oauth"
+            ):
                 return prof
     return None
 
@@ -121,7 +132,8 @@ def list_providers_response() -> list[dict[str, Any]]:
                 continue
             try:
                 tpl = json.loads(f.read_text(encoding="utf-8"))
-            except Exception:  # noqa: BLE001, S112 — skip malformed custom-provider files; not fatal for the listing
+            # Skip malformed custom-provider files; not fatal for the listing.
+            except Exception:  # noqa: BLE001, S112
                 continue
             env_key = f"CUSTOM_{f.stem.upper().replace('-', '_')}_API_KEY"
             out.append(
@@ -132,10 +144,7 @@ def list_providers_response() -> list[dict[str, Any]]:
                     "oauthOnly": False,
                     "custom": True,
                     "models": list(
-                        tpl.get("models", {})
-                        .get("providers", {})
-                        .get(f.stem, {})
-                        .get("models", [])
+                        tpl.get("models", {}).get("providers", {}).get(f.stem, {}).get("models", [])
                     ),
                     "knownModels": [],
                     "apiKey": sanitize_key(env_data.get(env_key, "")),

@@ -37,7 +37,8 @@ def set_value(key: str, value: str) -> tuple[bool, str]:
             gw = cfg.setdefault("gateway", {}).setdefault("auth", {})
             gw["token"] = value
             openclaw_config_service.write_atomic(cfg)
-        except Exception:  # noqa: BLE001, S110 — best-effort openclaw.json sync; .env write already succeeded
+        # Best-effort openclaw.json sync; .env write already succeeded.
+        except Exception:  # noqa: BLE001, S110
             pass
     return True, key
 

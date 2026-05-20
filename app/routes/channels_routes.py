@@ -40,6 +40,7 @@ def _prune_dangling_bindings(channel: str, account_id: str) -> int:
         openclaw_config_service.write_atomic(cfg)
     return removed
 
+
 channels_bp = Blueprint("channels", __name__, url_prefix="/api/channels")
 
 

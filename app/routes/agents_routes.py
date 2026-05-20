@@ -81,9 +81,7 @@ def set_default_route(agent_id: str):  # type: ignore[no-untyped-def]
     if not AGENT_ID_RE.match(agent_id):
         return jsonify({"ok": False, "error": "Invalid id"}), 400
     ok, msg = agent_service.set_default(agent_id)
-    return jsonify({"ok": ok, "default": agent_id, "message": msg}), (
-        200 if ok else 404
-    )
+    return jsonify({"ok": ok, "default": agent_id, "message": msg}), (200 if ok else 404)
 
 
 @agents_bp.get("/<agent_id>/api-key")
@@ -119,6 +117,6 @@ def put_agent_key_route(agent_id: str):  # type: ignore[no-untyped-def]
     if not provider or not api_key:
         return jsonify({"ok": False, "error": "provider and apiKey required"}), 400
     ok, ref = agent_service.set_agent_api_key(agent_id, provider, api_key)
-    return jsonify(
-        {"ok": ok, "agentId": agent_id, "provider": provider, "ref": ref}
-    ), (200 if ok else 404)
+    return jsonify({"ok": ok, "agentId": agent_id, "provider": provider, "ref": ref}), (
+        200 if ok else 404
+    )

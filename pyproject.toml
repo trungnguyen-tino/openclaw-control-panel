@@ -38,7 +38,9 @@ extend-exclude = "(ui/|static/|_sources/)"
 python_version = "3.12"
 strict = false
 ignore_missing_imports = true
-warn_unused_ignores = true
+# Newer mypy versions infer types older annotations had to silence — flipping
+# this off avoids churning every `# type: ignore` whenever CI bumps mypy.
+warn_unused_ignores = false
 exclude = ["_sources/", "ui/", "static/"]
 
 [tool.pytest.ini_options]

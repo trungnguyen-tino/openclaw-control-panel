@@ -41,8 +41,7 @@ _USR_LOCAL_BIN = Path("/usr/local/bin")
 def _url_for(tag: str) -> str:
     if not RELEASE_TARBALL_URL:
         raise RuntimeError(
-            "RELEASE_TARBALL_URL not configured. "
-            "Set OPENCLAW_PANEL_RELEASE_URL env var."
+            "RELEASE_TARBALL_URL not configured. " "Set OPENCLAW_PANEL_RELEASE_URL env var."
         )
     # GitHub's "latest" alias uses a different URL shape:
     # releases/latest/download/<asset> instead of releases/download/<tag>/<asset>.
@@ -112,9 +111,7 @@ def _swap(new: Path, current: Path, archive_root: Path) -> None:
 # Top-level entries that live under /opt/openclaw-mgmt/ but must NOT be
 # overwritten by promotion (runtime/venv state, archive dirs, the staged tree
 # itself, and on-disk backups).
-_PROMOTE_SKIP: frozenset[str] = frozenset(
-    {".venv", "current", ".new", ".old"}
-)
+_PROMOTE_SKIP: frozenset[str] = frozenset({".venv", "current", ".new", ".old"})
 
 
 def _promote_to_live(staged: Path) -> None:
@@ -235,8 +232,7 @@ def run(tag: str) -> None:
     # process — each call previously added a new FileHandler, causing every
     # log line to be written N times.
     if not any(
-        isinstance(h, logging.FileHandler)
-        and getattr(h, "baseFilename", "") == str(log_file)
+        isinstance(h, logging.FileHandler) and getattr(h, "baseFilename", "") == str(log_file)
         for h in log.handlers
     ):
         fh = logging.FileHandler(log_file)
@@ -266,9 +262,7 @@ def run(tag: str) -> None:
             import subprocess
 
             subprocess.run(["/usr/bin/systemctl", "daemon-reload"], check=False)
-            subprocess.run(
-                ["/usr/bin/systemctl", "reload-or-restart", "caddy"], check=False
-            )
+            subprocess.run(["/usr/bin/systemctl", "reload-or-restart", "caddy"], check=False)
             log.info("caddy reloaded after infra migration")
         # NB: don't replace the CURRENT process binary while running. Drop a
         # sentinel; a deployment hook (or systemd ExecStartPre) does the swap

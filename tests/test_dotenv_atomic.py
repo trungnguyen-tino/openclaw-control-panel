@@ -28,7 +28,7 @@ def test_read_ignores_comments_and_blank_lines(tmp_openclaw_home: Path) -> None:
 
 def test_read_strips_quoted_values(tmp_openclaw_home: Path) -> None:
     env_file = tmp_openclaw_home / ".env"
-    env_file.write_text('A="hello"\nB=\'world\'\n')
+    env_file.write_text("A=\"hello\"\nB='world'\n")
     assert dotenv_read(env_file) == {"A": "hello", "B": "world"}
 
 

@@ -78,9 +78,7 @@ def test_add_account_invokes_cli_then_restart(
         headers=h,
     )
     assert r.status_code == 201
-    assert stub_channels["add"] == [
-        ("telegram", "bot1", {"token": "123:abc", "name": "Bot One"})
-    ]
+    assert stub_channels["add"] == [("telegram", "bot1", {"token": "123:abc", "name": "Bot One"})]
 
 
 def test_add_account_rejects_unknown_channel(

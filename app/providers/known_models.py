@@ -113,39 +113,27 @@ PROVIDERS: Final[dict[str, _ProviderEntry]] = {
     },
     "deepseek": _bearer("DeepSeek", "DEEPSEEK_API_KEY", "https://api.deepseek.com/v1/models"),
     "groq": _bearer("Groq", "GROQ_API_KEY", "https://api.groq.com/openai/v1/models"),
-    "together": _bearer(
-        "Together AI", "TOGETHER_API_KEY", "https://api.together.xyz/v1/models"
-    ),
+    "together": _bearer("Together AI", "TOGETHER_API_KEY", "https://api.together.xyz/v1/models"),
     "mistral": _bearer("Mistral AI", "MISTRAL_API_KEY", "https://api.mistral.ai/v1/models"),
     "xai": _bearer("xAI (Grok)", "XAI_API_KEY", "https://api.x.ai/v1/models"),
     "cerebras": _bearer("Cerebras", "CEREBRAS_API_KEY", "https://api.cerebras.ai/v1/models"),
-    "sambanova": _bearer(
-        "SambaNova", "SAMBANOVA_API_KEY", "https://api.sambanova.ai/v1/models"
-    ),
+    "sambanova": _bearer("SambaNova", "SAMBANOVA_API_KEY", "https://api.sambanova.ai/v1/models"),
     "fireworks": _bearer(
         "Fireworks AI", "FIREWORKS_API_KEY", "https://api.fireworks.ai/inference/v1/models"
     ),
-    "cohere": _bearer(
-        "Cohere", "COHERE_API_KEY", "https://api.cohere.ai/compatibility/v1/models"
-    ),
+    "cohere": _bearer("Cohere", "COHERE_API_KEY", "https://api.cohere.ai/compatibility/v1/models"),
     "yi": _bearer("Yi/01.AI", "YI_API_KEY", "https://api.01.ai/v1/models"),
-    "baichuan": _bearer(
-        "Baichuan AI", "BAICHUAN_API_KEY", "https://api.baichuan-ai.com/v1/models"
-    ),
+    "baichuan": _bearer("Baichuan AI", "BAICHUAN_API_KEY", "https://api.baichuan-ai.com/v1/models"),
     "stepfun": _bearer("Stepfun", "STEPFUN_API_KEY", "https://api.stepfun.com/v1/models"),
     "siliconflow": _bearer(
         "SiliconFlow", "SILICONFLOW_API_KEY", "https://api.siliconflow.cn/v1/models"
     ),
-    "novita": _bearer(
-        "Novita AI", "NOVITA_API_KEY", "https://api.novita.ai/v3/openai/models"
-    ),
+    "novita": _bearer("Novita AI", "NOVITA_API_KEY", "https://api.novita.ai/v3/openai/models"),
     "openrouter": _bearer(
         "OpenRouter", "OPENROUTER_API_KEY", "https://openrouter.ai/api/v1/models"
     ),
     "minimax": _bearer("Minimax", "MINIMAX_API_KEY", "https://api.minimax.io/v1/models"),
-    "moonshot": _bearer(
-        "Moonshot/Kimi", "MOONSHOT_API_KEY", "https://api.moonshot.ai/v1/models"
-    ),
+    "moonshot": _bearer("Moonshot/Kimi", "MOONSHOT_API_KEY", "https://api.moonshot.ai/v1/models"),
     "zhipu": {
         "name": "Zhipu/GLM",
         "env_key": "ZHIPU_API_KEY",

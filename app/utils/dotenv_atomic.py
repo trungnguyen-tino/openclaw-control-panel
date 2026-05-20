@@ -86,9 +86,7 @@ def dotenv_set(key: str, value: str, path: Path | None = None) -> None:
     p = path or _path()
     p.parent.mkdir(parents=True, exist_ok=True)
     with _WRITE_LOCK:
-        existing = (
-            p.read_text(encoding="utf-8").splitlines(keepends=False) if p.is_file() else []
-        )
+        existing = p.read_text(encoding="utf-8").splitlines(keepends=False) if p.is_file() else []
         found = False
         new_lines: list[str] = []
         for line in existing:

@@ -42,9 +42,7 @@ def list_agents() -> list[dict[str, Any]]:
                 "default": bool(a.get("default")),
                 "model": a.get("model"),
                 "hasAuthProfiles": bool(profiles),
-                "apiKeyCount": sum(
-                    1 for p in profiles.values() if p.get("type") == "api_key"
-                ),
+                "apiKeyCount": sum(1 for p in profiles.values() if p.get("type") == "api_key"),
             }
         )
     return out

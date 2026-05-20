@@ -42,9 +42,7 @@ def login():  # type: ignore[no-untyped-def]
     mgmt_api_key = dotenv_get("OPENCLAW_MGMT_API_KEY") or ""
     # User passed username+password — same trust boundary as pasting the raw
     # key. Returning mgmtApiKey lets the SPA bootstrap Bearer auth in one step.
-    return jsonify(
-        {"ok": True, "gatewayToken": gateway_token, "mgmtApiKey": mgmt_api_key}
-    )
+    return jsonify({"ok": True, "gatewayToken": gateway_token, "mgmtApiKey": mgmt_api_key})
 
 
 @auth_bp.post("/create-user")
@@ -64,9 +62,7 @@ def create_user():  # type: ignore[no-untyped-def]
 @require_bearer
 def get_user():  # type: ignore[no-untyped-def]
     stored_user = dotenv_get("OPENCLAW_LOGIN_USER")
-    return jsonify(
-        {"ok": True, "configured": bool(stored_user), "username": stored_user or ""}
-    )
+    return jsonify({"ok": True, "configured": bool(stored_user), "username": stored_user or ""})
 
 
 @auth_bp.put("/change-password")

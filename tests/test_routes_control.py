@@ -72,11 +72,13 @@ def test_upgrade_returns_202_async(
     # Make sure we don't fork a real npm process.
     import app.routes.control_routes as ctrl
 
-    monkeypatch.setattr(ctrl, "_run_upgrade_in_background", lambda: None)
+    monkeypatch.setattr(ctrl, "_run_upgrade_in_background", lambda *a, **kw: None)
     r = client.post("/api/upgrade", headers=h)
     assert r.status_code == 202
     body = r.get_json()
-    assert body["async"] is True
+    assert body["ok"] is True
+    assert body["started"] is True
+    assert body["action"] == "upgrade"
 
 
 def test_reset_requires_confirm_string(

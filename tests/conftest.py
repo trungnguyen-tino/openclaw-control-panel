@@ -21,6 +21,9 @@ def tmp_openclaw_home(monkeypatch: pytest.MonkeyPatch) -> Iterator[Path]:
     (tmp / ".env").write_text("")
     monkeypatch.setenv("OPENCLAW_HOME", str(tmp))
     monkeypatch.setenv("OPENCLAW_TEMPLATES_DIR", str(tmp / "templates"))
+    # Pin openclaw.json to the legacy config/ path used by test fixtures; the
+    # production default is `<home>/.openclaw/openclaw.json` (see app.config).
+    monkeypatch.setenv("OPENCLAW_CONFIG_FILE", str(tmp / "config" / "openclaw.json"))
     (tmp / "templates").mkdir()
     # Re-import config so PATHS picks up the new env (cached at import time).
     import app.config as cfg

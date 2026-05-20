@@ -81,6 +81,14 @@ EXPECTED_ROUTES: set[tuple[str, str]] = {
     ("GET", "/api/env"),
     ("PUT", "/api/env/<key>"),
     ("DELETE", "/api/env/<key>"),
+    # upgrade discovery
+    ("GET", "/api/upgrade/versions"),
+    # OpenClaw chat — live sessions
+    ("GET", "/api/openclaw/sessions"),
+    ("DELETE", "/api/openclaw/sessions/<sid>"),
+    ("GET", "/api/openclaw/sessions/<sid>/messages"),
+    ("GET", "/api/openclaw/sessions/<sid>/stream"),
+    ("POST", "/api/openclaw/sessions/<sid>/send"),
 }
 
 

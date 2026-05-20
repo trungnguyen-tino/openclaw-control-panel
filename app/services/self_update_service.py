@@ -25,7 +25,7 @@ from urllib.parse import urlsplit
 import requests
 
 from app.config import RELEASE_TARBALL_URL
-from app.services.systemd_service import restart
+from app.services.systemd_service import restart_detached
 
 log = logging.getLogger("openclaw.self_update")
 
@@ -106,6 +106,35 @@ def _swap(new: Path, current: Path, archive_root: Path) -> None:
         archive_dest = archive_root / time.strftime("%Y%m%d-%H%M%S")
         shutil.move(str(current), str(archive_dest))
     shutil.move(str(new), str(current))
+    _promote_to_live(current)
+
+
+# Top-level entries that live under /opt/openclaw-mgmt/ but must NOT be
+# overwritten by promotion (runtime/venv state, archive dirs, the staged tree
+# itself, and on-disk backups).
+_PROMOTE_SKIP: frozenset[str] = frozenset(
+    {".venv", "current", ".new", ".old"}
+)
+
+
+def _promote_to_live(staged: Path) -> None:
+    """Copy `staged/*` on top of `_INSTALL_ROOT` so gunicorn reloads new code.
+
+    The previous design left `staged/` as a side-tree and relied on a non-
+    existent ExecStartPre hook. Promotion fixes that: every file under the
+    staged tree is copied into the live root, skipping runtime entries
+    (`.venv`, archive dirs, the staged tree itself, and on-disk backups).
+    """
+    if not staged.is_dir():
+        return
+    for entry in staged.iterdir():
+        if entry.name in _PROMOTE_SKIP or entry.name.startswith(".live-backup-"):
+            continue
+        dst = _INSTALL_ROOT / entry.name
+        if entry.is_dir():
+            shutil.copytree(entry, dst, dirs_exist_ok=True)
+        else:
+            shutil.copy2(entry, dst)
 
 
 def _copy_if_different(src: Path, dst: Path, mode: int = 0o644) -> bool:
@@ -202,9 +231,17 @@ def run(tag: str) -> None:
     """Synchronous worker — call inside a daemon thread."""
     _LOG_DIR.mkdir(parents=True, exist_ok=True)
     log_file = _LOG_DIR / "self-update.log"
-    fh = logging.FileHandler(log_file)
-    fh.setFormatter(logging.Formatter("%(asctime)s %(levelname)s %(message)s"))
-    log.addHandler(fh)
+    # Avoid handler accumulation across repeated `run()` calls in the same
+    # process — each call previously added a new FileHandler, causing every
+    # log line to be written N times.
+    if not any(
+        isinstance(h, logging.FileHandler)
+        and getattr(h, "baseFilename", "") == str(log_file)
+        for h in log.handlers
+    ):
+        fh = logging.FileHandler(log_file)
+        fh.setFormatter(logging.Formatter("%(asctime)s %(levelname)s %(message)s"))
+        log.addHandler(fh)
     log.setLevel(logging.INFO)
     try:
         url = _url_for(tag)
@@ -241,8 +278,8 @@ def run(tag: str) -> None:
             log.warning("post-update invariants failed: %s", failures)
         else:
             log.info("post-update invariants OK")
-        log.info("swap complete — restarting service")
-        ok, msg = restart("openclaw-mgmt")
+        log.info("swap complete — restarting service (detached)")
+        ok, msg = restart_detached("openclaw-mgmt")
         log.info("restart ok=%s msg=%s", ok, msg)
     except Exception as exc:  # noqa: BLE001 — bubble all errors to the log
         log.exception("self-update failed: %s", exc)

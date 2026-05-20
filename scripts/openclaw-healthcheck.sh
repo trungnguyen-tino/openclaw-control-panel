@@ -24,6 +24,23 @@ log() {
   logger -t "$TAG" "$*"
 }
 
+# ---- check 0: self-heal panel self-update promote ----
+# Old _swap() (≤ v0.2.9) moved .new/ → current/ but never promoted into the
+# live /opt/openclaw-mgmt/ tree, so gunicorn kept loading old code. Detect
+# a fresh current/ and copy it on top of live, then restart mgmt.
+LIVE_INIT=/opt/openclaw-mgmt/app/__init__.py
+CURR_INIT=/opt/openclaw-mgmt/current/app/__init__.py
+if [[ -f "$CURR_INIT" && -f "$LIVE_INIT" && "$CURR_INIT" -nt "$LIVE_INIT" ]]; then
+  log "check0 promote: current/ newer than live — promoting"
+  if cp -arT /opt/openclaw-mgmt/current/ /opt/openclaw-mgmt/ 2>>"$LOG"; then
+    systemctl restart openclaw-mgmt
+    FIXED=$((FIXED+1))
+    log "  → promoted + restarted openclaw-mgmt"
+  else
+    log "  → cp failed"; FAILED=$((FAILED+1))
+  fi
+fi
+
 wait_caddy_ready() {
   for _ in 1 2 3 4 5 6 7 8 9 10; do
     sleep 2

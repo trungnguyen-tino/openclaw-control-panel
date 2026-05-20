@@ -35,6 +35,19 @@ def restart(name: str) -> tuple[bool, str]:
     return ok, (r.stderr or r.stdout).strip()
 
 
+def restart_detached(name: str) -> tuple[bool, str]:
+    """Fire-and-forget restart — does not wait for the job to complete.
+
+    Required when the caller is itself inside the unit being restarted:
+    a blocking `systemctl restart` deadlocks because systemd kills our
+    process mid-call, leaving stderr empty and returncode negative.
+    """
+    _assert_allowed(name)
+    r = run_cmd([_SYSTEMCTL, "--no-block", "restart", name], timeout=10)
+    ok = r.returncode == 0
+    return ok, (r.stderr or r.stdout).strip()
+
+
 def stop(name: str) -> tuple[bool, str]:
     _assert_allowed(name)
     r = run_cmd([_SYSTEMCTL, "stop", name], timeout=30)

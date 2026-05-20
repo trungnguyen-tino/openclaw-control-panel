@@ -16,7 +16,6 @@ def _auth_h(tmp_home: Path) -> dict[str, str]:
 @pytest.fixture
 def stub_dns_and_caddy(monkeypatch: pytest.MonkeyPatch) -> dict:
     from app.services import (
-        caddy_service,
         dns_check_service,
         domain_change_service,
         systemd_service,

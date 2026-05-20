@@ -13,7 +13,6 @@ import pytest
 
 from app.services import oauth_codex_service, pkce_service
 
-
 # -- PKCE helpers -----------------------------------------------------------
 
 

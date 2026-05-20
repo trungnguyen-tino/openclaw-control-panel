@@ -24,7 +24,7 @@ export function ControlPage() {
   const [confirm, setConfirm] = useState("");
   const [msg, setMsg] = useState<string | null>(null);
 
-  function call(path: string, label: string) {
+  function useControlMutation(path: string, label: string) {
     return useMutation({
       mutationFn: () => api(path, { method: "POST" }),
       onSuccess: () => {
@@ -35,9 +35,9 @@ export function ControlPage() {
     });
   }
 
-  const restart = call("/api/restart", "khởi động lại");
-  const stop = call("/api/stop", "dừng");
-  const rebuild = call("/api/rebuild", "rebuild");
+  const restart = useControlMutation("/api/restart", "khởi động lại");
+  const stop = useControlMutation("/api/stop", "dừng");
+  const rebuild = useControlMutation("/api/rebuild", "rebuild");
 
   const reset = useMutation({
     mutationFn: () => api("/api/reset", jsonBody({ confirm })),

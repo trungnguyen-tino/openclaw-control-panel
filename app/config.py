@@ -28,7 +28,7 @@ class Paths:
     config_templates_dir: Path  # /etc/openclaw/config
 
     @classmethod
-    def from_env(cls) -> "Paths":
+    def from_env(cls) -> Paths:
         home = Path(os.environ.get("OPENCLAW_HOME", "/opt/openclaw"))
         config_dir = home / "config"
         # Live openclaw runtime writes to .openclaw/openclaw.json — point the

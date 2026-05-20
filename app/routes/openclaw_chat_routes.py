@@ -16,10 +16,10 @@ from __future__ import annotations
 
 import json
 import logging
-import os
 import time
+from collections.abc import Iterator
 from pathlib import Path
-from typing import Any, Iterator
+from typing import Any
 
 from flask import Blueprint, Response, jsonify, request, stream_with_context
 

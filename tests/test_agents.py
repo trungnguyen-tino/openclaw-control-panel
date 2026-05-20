@@ -5,8 +5,6 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-import pytest
-
 
 def _auth_h(tmp_home: Path) -> dict[str, str]:
     key = "g" * 64

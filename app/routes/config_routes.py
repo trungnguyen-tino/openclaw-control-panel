@@ -203,7 +203,7 @@ def list_custom_providers():  # type: ignore[no-untyped-def]
             continue
         try:
             tpl = json.loads(f.read_text(encoding="utf-8"))
-        except Exception:
+        except Exception:  # noqa: BLE001, S112 — skip malformed custom-provider files; not fatal for the listing
             continue
         provider_cfg = tpl.get("models", {}).get("providers", {}).get(f.stem, {})
         out.append(

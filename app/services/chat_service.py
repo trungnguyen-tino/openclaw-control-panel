@@ -8,7 +8,6 @@ from __future__ import annotations
 
 import json
 import logging
-import os
 from typing import Any
 
 from app.services.openclaw_config_service import get_active_provider_model

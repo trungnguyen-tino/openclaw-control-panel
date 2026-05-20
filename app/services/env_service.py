@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import json
 from typing import Final
 
 from app.services import openclaw_config_service
@@ -38,7 +37,7 @@ def set_value(key: str, value: str) -> tuple[bool, str]:
             gw = cfg.setdefault("gateway", {}).setdefault("auth", {})
             gw["token"] = value
             openclaw_config_service.write_atomic(cfg)
-        except Exception:
+        except Exception:  # noqa: BLE001, S110 — best-effort openclaw.json sync; .env write already succeeded
             pass
     return True, key
 

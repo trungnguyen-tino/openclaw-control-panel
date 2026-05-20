@@ -265,8 +265,10 @@ def run(tag: str) -> None:
             # errors so a stale caddy doesn't block the panel update.
             import subprocess
 
-            subprocess.run(["systemctl", "daemon-reload"], check=False)
-            subprocess.run(["systemctl", "reload-or-restart", "caddy"], check=False)
+            subprocess.run(["/usr/bin/systemctl", "daemon-reload"], check=False)
+            subprocess.run(
+                ["/usr/bin/systemctl", "reload-or-restart", "caddy"], check=False
+            )
             log.info("caddy reloaded after infra migration")
         # NB: don't replace the CURRENT process binary while running. Drop a
         # sentinel; a deployment hook (or systemd ExecStartPre) does the swap

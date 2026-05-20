@@ -2,9 +2,7 @@
 
 from __future__ import annotations
 
-import subprocess
 from pathlib import Path
-from unittest.mock import Mock
 
 import pytest
 
@@ -12,7 +10,7 @@ import pytest
 @pytest.fixture
 def mock_systemd(monkeypatch: pytest.MonkeyPatch) -> None:
     """Stub systemctl + journalctl so tests never shell out."""
-    from app.services import systemd_service, journalctl_service
+    from app.services import journalctl_service, systemd_service
 
     monkeypatch.setattr(systemd_service, "is_active", lambda _: True)
     monkeypatch.setattr(systemd_service, "started_at", lambda _: None)

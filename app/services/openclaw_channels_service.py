@@ -7,15 +7,12 @@ accounts identified by `account id`. Credentials are stored under
 
 from __future__ import annotations
 
-import json
 import logging
-import os
 import threading
 import time
 from typing import Any, Final
 
 from app.utils.dotenv_atomic import dotenv_get
-from app.utils.subprocess_safe import run_cmd
 
 log = logging.getLogger("openclaw.channels")
 

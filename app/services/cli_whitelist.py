@@ -32,7 +32,7 @@ ALLOWED_PREFIXES: Final[tuple[tuple[str, ...], ...]] = (
 _META_RE = re.compile(r"[;&|`(){}!'\"<>$\\]")
 
 
-class CliBlocked(Exception):
+class CliBlocked(Exception):  # noqa: N818 — public name predates the lint rule; renaming is a breaking API change
     """Raised when a command fails the whitelist."""
 
 

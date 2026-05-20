@@ -6,7 +6,6 @@ disappears, this test fails before any downstream feature test.
 
 from __future__ import annotations
 
-
 EXPECTED_ROUTES: set[tuple[str, str]] = {
     # health
     ("GET", "/api/health"),
@@ -106,7 +105,7 @@ def _registered(app) -> set[tuple[str, str]]:  # type: ignore[no-untyped-def]
 def test_every_planned_endpoint_is_registered(app) -> None:  # type: ignore[no-untyped-def]
     registered = _registered(app)
     missing = EXPECTED_ROUTES - registered
-    assert not missing, f"Missing routes:\n  " + "\n  ".join(
+    assert not missing, "Missing routes:\n  " + "\n  ".join(
         f"{m} {p}" for m, p in sorted(missing)
     )
 
@@ -119,6 +118,6 @@ def test_no_unexpected_api_routes(app) -> None:  # type: ignore[no-untyped-def]
         if rule.startswith("/api/") or rule == "/pair":
             if (method, rule) not in EXPECTED_ROUTES:
                 extra.add((method, rule))
-    assert not extra, f"Unexpected routes:\n  " + "\n  ".join(
+    assert not extra, "Unexpected routes:\n  " + "\n  ".join(
         f"{m} {p}" for m, p in sorted(extra)
     )

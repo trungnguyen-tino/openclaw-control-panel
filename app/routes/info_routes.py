@@ -4,13 +4,11 @@ from __future__ import annotations
 
 import socket
 
-from flask import Blueprint, jsonify, request
-
-from flask import Response, stream_with_context
+from flask import Blueprint, Response, jsonify, request, stream_with_context
 
 from app.auth import require_bearer
 from app.config import ALLOWED_SERVICES
-from app.services import journalctl_service, systemd_service, system_info_service
+from app.services import journalctl_service, system_info_service, systemd_service
 from app.services.dns_check_service import resolve_a
 from app.services.terminal_stream_service import stream_journalctl
 from app.utils.dotenv_atomic import dotenv_get, dotenv_read

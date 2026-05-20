@@ -48,8 +48,7 @@ def register_extensions(app: Flask) -> None:
             from app.services.oauth_refresher_thread import start_once
 
             start_once()
-        except Exception:
-            # Never block app start because the refresher couldn't spin up.
+        except Exception:  # noqa: BLE001, S110 — best-effort startup; refresher failure must not block app boot
             pass
 
 

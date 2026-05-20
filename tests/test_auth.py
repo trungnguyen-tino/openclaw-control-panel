@@ -5,7 +5,6 @@ from __future__ import annotations
 import hashlib
 from pathlib import Path
 
-import pytest
 from flask import Blueprint, Flask
 
 from app.auth import (
@@ -17,7 +16,6 @@ from app.auth import (
     scrypt_verify,
 )
 from app.config import MAX_AUTH_FAILURES
-
 
 # -- scrypt parity ----------------------------------------------------------
 

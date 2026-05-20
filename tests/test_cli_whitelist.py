@@ -73,8 +73,9 @@ def test_cli_route_returns_output(
     client, tmp_openclaw_home: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:  # type: ignore[no-untyped-def]
     h = _auth_h(tmp_openclaw_home)
-    import app.routes.cli_routes as cli_routes
     from types import SimpleNamespace
+
+    import app.routes.cli_routes as cli_routes
 
     fake = SimpleNamespace(returncode=0, stdout="version 1.0\n", stderr="")
     monkeypatch.setattr(cli_routes, "run_cmd", lambda parts, timeout=30: fake)

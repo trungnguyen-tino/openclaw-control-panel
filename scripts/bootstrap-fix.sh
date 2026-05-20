@@ -61,11 +61,15 @@ else
   echo "       env already points at public (or .env missing — skipped)"
 fi
 
-echo "[5/5] Restart openclaw-mgmt"
+echo "[5/5] Restart openclaw-mgmt (detached)"
 systemctl daemon-reload
-systemctl restart openclaw-mgmt
+# --no-block: don't wait for the restart job to finish. When this script is
+# run from the panel's own Terminal page, a blocking restart kills our SSE
+# session mid-call and the script exits with -15 before printing verify.
+systemctl --no-block restart openclaw-mgmt
 
-sleep 5
+# Give systemd a moment to actually relaunch before we probe.
+sleep 8
 
 # ---- verify ----
 if systemctl is-active --quiet openclaw-mgmt; then

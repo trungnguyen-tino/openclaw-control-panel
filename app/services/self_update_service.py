@@ -44,6 +44,12 @@ def _url_for(tag: str) -> str:
             "RELEASE_TARBALL_URL not configured. "
             "Set OPENCLAW_PANEL_RELEASE_URL env var."
         )
+    # GitHub's "latest" alias uses a different URL shape:
+    # releases/latest/download/<asset> instead of releases/download/<tag>/<asset>.
+    if tag == "latest":
+        return RELEASE_TARBALL_URL.replace(
+            "/releases/download/{tag}/", "/releases/latest/download/"
+        )
     return RELEASE_TARBALL_URL.replace("{tag}", tag)
 
 

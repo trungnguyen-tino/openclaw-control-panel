@@ -29,7 +29,9 @@ class Paths:
 
     @classmethod
     def from_env(cls) -> Paths:
-        home = Path(os.environ.get("OPENCLAW_HOME", "/opt/openclaw"))
+        from app.platform_paths import default_home, default_templates_dir
+
+        home = default_home()
         config_dir = home / "config"
         # Live openclaw runtime writes to .openclaw/openclaw.json — point the
         # panel at the same file so we don't fork the agents/channels/bindings
@@ -49,9 +51,7 @@ class Paths:
             devices_pending=devices_dir / "pending.json",
             devices_paired=devices_dir / "paired.json",
             caddyfile=home / "Caddyfile",
-            config_templates_dir=Path(
-                os.environ.get("OPENCLAW_TEMPLATES_DIR", "/etc/openclaw/config")
-            ),
+            config_templates_dir=default_templates_dir(),
         )
 
 

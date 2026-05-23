@@ -1,0 +1,60 @@
+{
+  "name": "openclaw-desktop",
+  "version": "0.1.0",
+  "description": "OpenClaw Panel desktop wrapper — Electron + WSL2 backend on Windows",
+  "main": "src/main/index.js",
+  "scripts": {
+    "start": "electron .",
+    "build": "electron-builder",
+    "build:win": "electron-builder --win",
+    "lint": "eslint src --ext js",
+    "test:wsl": "node src/main/wsl-detector.js"
+  },
+  "license": "UNLICENSED",
+  "private": true,
+  "devDependencies": {
+    "electron": "^34.0.0",
+    "electron-builder": "^25.0.0",
+    "eslint": "^9.0.0"
+  },
+  "dependencies": {
+    "electron-updater": "^6.3.0"
+  },
+  "build": {
+    "appId": "com.trungnguyen.openclaw",
+    "productName": "OpenClaw",
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "src/**/*",
+      "resources/**/*"
+    ],
+    "extraResources": [
+      {
+        "from": "../scripts/bootstrap-fix.sh",
+        "to": "bootstrap-fix.sh"
+      }
+    ],
+    "win": {
+      "target": [
+        { "target": "nsis", "arch": ["x64"] }
+      ],
+      "icon": "resources/icon.ico"
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true
+    },
+    "publish": [
+      {
+        "provider": "github",
+        "owner": "trungnguyen-tino",
+        "repo": "openclaw-control-panel"
+      }
+    ]
+  }
+}

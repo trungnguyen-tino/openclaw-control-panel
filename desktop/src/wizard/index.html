@@ -1,0 +1,169 @@
+<!doctype html>
+<html lang="vi">
+  <head>
+    <meta charset="utf-8" />
+    <title>OpenClaw — Cài đặt lần đầu</title>
+    <style>
+      :root {
+        color-scheme: dark;
+        font-family: -apple-system, "Segoe UI", system-ui, sans-serif;
+      }
+      body {
+        margin: 0;
+        padding: 32px;
+        background: #0b0e14;
+        color: #d6deeb;
+        line-height: 1.5;
+      }
+      h1 {
+        font-size: 20px;
+        margin: 0 0 8px;
+      }
+      p.lede {
+        color: #9aa6c4;
+        margin: 0 0 24px;
+      }
+      ol.steps {
+        list-style: none;
+        padding: 0;
+        margin: 0;
+      }
+      ol.steps li {
+        padding: 10px 12px;
+        border-left: 3px solid #2c3344;
+        margin-bottom: 6px;
+        color: #5e6a87;
+        transition: all 0.2s;
+      }
+      ol.steps li.active {
+        border-left-color: #38bdf8;
+        color: #d6deeb;
+        background: #11161f;
+      }
+      ol.steps li.done {
+        border-left-color: #22c55e;
+        color: #9aa6c4;
+      }
+      ol.steps li.failed {
+        border-left-color: #ef4444;
+        color: #fecaca;
+      }
+      pre.log {
+        margin-top: 24px;
+        padding: 12px;
+        background: #060810;
+        border: 1px solid #1b2030;
+        border-radius: 6px;
+        font-size: 11px;
+        max-height: 160px;
+        overflow-y: auto;
+        color: #8b96b0;
+        white-space: pre-wrap;
+      }
+      .actions {
+        margin-top: 24px;
+        display: flex;
+        gap: 12px;
+      }
+      button {
+        padding: 10px 16px;
+        background: #1f2937;
+        color: #d6deeb;
+        border: 1px solid #2c3344;
+        border-radius: 6px;
+        font-size: 13px;
+        cursor: pointer;
+      }
+      button.primary {
+        background: #2563eb;
+        border-color: #2563eb;
+      }
+      button:disabled {
+        opacity: 0.4;
+        cursor: not-allowed;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>Đang chuẩn bị OpenClaw cho lần đầu sử dụng</h1>
+    <p class="lede">
+      OpenClaw cần WSL2 + Ubuntu để chạy backend. Quá trình này diễn ra
+      tự động — chỉ mất vài phút và chỉ làm 1 lần.
+    </p>
+
+    <ol class="steps" id="steps">
+      <li data-step="probe">Kiểm tra hệ thống</li>
+      <li data-step="install_wsl">Cài WSL2 (cần restart sau)</li>
+      <li data-step="install_distro">Tải Ubuntu 22.04</li>
+      <li data-step="provision_distro">Cấu hình distro</li>
+      <li data-step="run_bootstrap">Cài OpenClaw backend</li>
+      <li data-step="healthcheck">Kiểm tra hoạt động</li>
+    </ol>
+
+    <pre class="log" id="log"></pre>
+
+    <div class="actions">
+      <button id="retry" disabled>Thử lại</button>
+      <button id="reboot" class="primary" style="display: none" onclick="window.close()">
+        Đã hiểu — restart Windows
+      </button>
+      <button id="close" class="primary" style="display: none" onclick="window.close()">
+        Hoàn tất
+      </button>
+    </div>
+
+    <script>
+      const stepsEl = document.getElementById("steps");
+      const logEl = document.getElementById("log");
+      const retryBtn = document.getElementById("retry");
+      const rebootBtn = document.getElementById("reboot");
+      const closeBtn = document.getElementById("close");
+
+      function setStepClass(stepName, cls) {
+        for (const li of stepsEl.querySelectorAll("li")) {
+          if (li.dataset.step === stepName) li.classList.add(cls);
+        }
+      }
+      function markDoneBefore(stepName) {
+        const stepEls = [...stepsEl.querySelectorAll("li")];
+        const idx = stepEls.findIndex((el) => el.dataset.step === stepName);
+        for (let i = 0; i < idx; i++) stepEls[i].classList.add("done");
+      }
+
+      window.openclawWizard.onStep(({ step }) => {
+        if (step === "done" || step === "failed" || step === "reboot_required") return;
+        markDoneBefore(step);
+        setStepClass(step, "active");
+      });
+
+      window.openclawWizard.onLog(({ text }) => {
+        logEl.textContent += text;
+        logEl.scrollTop = logEl.scrollHeight;
+      });
+
+      window.openclawWizard.onReboot(() => {
+        for (const li of stepsEl.querySelectorAll("li")) li.classList.add("done");
+        rebootBtn.style.display = "inline-block";
+      });
+
+      window.openclawWizard.onDone(() => {
+        for (const li of stepsEl.querySelectorAll("li")) li.classList.add("done");
+        closeBtn.style.display = "inline-block";
+      });
+
+      window.openclawWizard.onError(({ message }) => {
+        const active = stepsEl.querySelector("li.active");
+        if (active) active.classList.replace("active", "failed");
+        logEl.textContent += "\n❌ " + message;
+        retryBtn.disabled = false;
+      });
+
+      retryBtn.addEventListener("click", () => {
+        for (const li of stepsEl.querySelectorAll("li")) li.className = "";
+        logEl.textContent = "";
+        retryBtn.disabled = true;
+        window.openclawWizard.retry();
+      });
+    </script>
+  </body>
+</html>

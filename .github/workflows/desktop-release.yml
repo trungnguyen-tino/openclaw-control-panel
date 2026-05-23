@@ -1,0 +1,62 @@
+name: Desktop Release
+
+# Builds the cross-platform Electron installer on every tag that starts
+# with `desktop-v*` (so it never collides with the panel's own `v*`
+# release tags) and publishes the .deb / AppImage / .exe artifacts to
+# the corresponding GitHub Release.
+#
+# Trigger from anywhere:
+#   git tag desktop-v0.1.0
+#   git push origin desktop-v0.1.0
+
+on:
+  push:
+    tags:
+      - "desktop-v*"
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-22.04
+            target: linux
+          - os: windows-2022
+            target: win
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: desktop/package-lock.json
+
+      - name: Install desktop deps
+        working-directory: desktop
+        run: npm ci
+
+      - name: Build (${{ matrix.target }})
+        working-directory: desktop
+        env:
+          # Provide a token so electron-builder can attach assets to the
+          # matching GitHub Release in the same repository.
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: npm run build:${{ matrix.target }} -- --publish always
+
+      - name: Upload artifacts (workflow_dispatch fallback)
+        if: github.event_name == 'workflow_dispatch'
+        uses: actions/upload-artifact@v4
+        with:
+          name: openclaw-desktop-${{ matrix.target }}
+          path: |
+            desktop/dist/*.exe
+            desktop/dist/*.deb
+            desktop/dist/*.AppImage
+            desktop/dist/latest*.yml
+          if-no-files-found: warn

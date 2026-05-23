@@ -166,6 +166,29 @@ Stored at `app.getPath("userData")`:
 
 Uninstalling the app removes both.
 
+## Releasing
+
+Push a tag prefixed with `desktop-v` and the
+[`.github/workflows/desktop-release.yml`](../.github/workflows/desktop-release.yml)
+workflow builds + publishes the installers for both platforms to the
+matching GitHub Release:
+
+```bash
+git tag desktop-v0.1.0
+git push origin desktop-v0.1.0
+```
+
+Tag prefix is `desktop-v*` so it never collides with the panel's own
+`v*` release tags. The workflow runs in parallel on `ubuntu-22.04` +
+`windows-2022`, then `electron-builder --publish always` attaches:
+
+- `OpenClaw Setup <version>.exe` + `latest.yml`           (Windows NSIS)
+- `openclaw-desktop_<version>_amd64.deb`                  (Ubuntu/Debian)
+- `OpenClaw-<version>.AppImage` + `latest-linux.yml`      (portable Linux)
+
+`latest*.yml` files are what electron-updater reads to discover new
+versions in installed copies.
+
 ## Phase roadmap
 
 | Phase | Status |
@@ -174,11 +197,25 @@ Uninstalling the app removes both.
 | 0.5 Linux pkexec branch + healthcheck short-circuit | ✅ done |
 | 1. Electron entry + tray + BrowserWindow | ✅ done |
 | 1.5 Cloudflare Quick Tunnel manager + tray UI | ✅ done |
-| 2. First-run wizard UI polish | 🚧 minimal version exists |
-| 3. Installer (electron-builder NSIS + deb + AppImage) | ⏸️ |
-| 4. Auto-update via electron-updater | ⏸️ |
-| 5. Linux + Windows test matrix + error UX | ⏸️ |
-| 6. Optional: Named Tunnel mode (bring-own-CF-account) | ⏸️ |
+| 2. First-run wizard UI polish + preflight UX | ✅ done |
+| 3. Installer (electron-builder NSIS + deb + AppImage) | ✅ done — GH Actions |
+| 4. Auto-update via electron-updater | ✅ done |
+| 5. Icons (.ico / .png) + real branding | 🚧 TODO — drop into resources/ |
+| 6. Linux + Windows test matrix + error UX | ⏸️ |
+| 7. Optional: Named Tunnel mode (bring-own-CF-account) | ⏸️ |
+
+### Icons TODO
+
+The build runs without icons (uses Electron's default). To brand:
+
+```
+desktop/resources/icon.ico    Windows installer + .exe icon (256x256)
+desktop/resources/icon.png    Linux app icon (512x512)
+desktop/resources/tray.png    Tray icon (16x16 + 32x32 + 64x64)
+```
+
+Then re-add `"icon": "resources/icon.{ico,png}"` to the `win` / `linux`
+blocks in `package.json`.
 
 ## Not in scope for this wrapper
 

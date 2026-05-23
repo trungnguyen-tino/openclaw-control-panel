@@ -14,13 +14,14 @@
 
 "use strict";
 
-const { app, Tray, Menu, BrowserWindow, ipcMain, shell, clipboard, nativeImage } =
+const { app, Tray, Menu, BrowserWindow, ipcMain, shell, clipboard, nativeImage, dialog } =
   require("electron");
 const path = require("node:path");
 const fs = require("node:fs");
 
 const { BootstrapRunner, Step } = require("./bootstrap-runner");
 const { CloudflaredManager, State: TunnelState } = require("./cloudflared-manager");
+const { setupAutoUpdater } = require("./auto-updater");
 
 const PANEL_URL = "http://127.0.0.1:9998";
 const TRAY_ICON = path.join(__dirname, "../../resources/tray.png");
@@ -145,13 +146,19 @@ function _tunnelMenuItem() {
   }
 }
 
+const { getUpdateMenuItems } = require("./auto-updater");
+
 function buildTrayMenu() {
   const s = loadSettings();
   const platformLabel = process.platform === "win32" ? "Windows" : "máy";
   return Menu.buildFromTemplate([
+    { label: `OpenClaw Desktop v${app.getVersion()}`, enabled: false },
+    { type: "separator" },
     { label: "Mở Panel", click: () => getOrCreateWindow() },
     { type: "separator" },
     ..._tunnelMenuItem(),
+    { type: "separator" },
+    ...getUpdateMenuItems(),
     { type: "separator" },
     {
       label: `Khởi động cùng ${platformLabel}`,
@@ -242,6 +249,7 @@ app.on("second-instance", () => getOrCreateWindow());
 
 app.whenReady().then(async () => {
   buildTray();
+  setupAutoUpdater({ onUpdate: rebuildTrayMenu });
   const settings = loadSettings();
   syncAutoStart(settings.autoStart);
 

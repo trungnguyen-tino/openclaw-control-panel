@@ -34,8 +34,7 @@
     "win": {
       "target": [
         { "target": "nsis", "arch": ["x64"] }
-      ],
-      "icon": "resources/icon.ico"
+      ]
     },
     "linux": {
       "target": [
@@ -43,7 +42,6 @@
         { "target": "AppImage", "arch": ["x64"] }
       ],
       "category": "Utility",
-      "icon": "resources/icon.png",
       "synopsis": "OpenClaw Panel desktop app",
       "description": "Self-hosted OpenClaw control panel — Ubuntu + Windows desktop wrapper with optional Cloudflare Tunnel for remote access."
     },

@@ -33,6 +33,7 @@ const PANEL_PORT = 9998;
 
 const Step = Object.freeze({
   PROBE: "probe",
+  PREFLIGHT: "preflight",
   INSTALL_WSL: "install_wsl",
   REBOOT_REQUIRED: "reboot_required",
   INSTALL_DISTRO: "install_distro",
@@ -42,6 +43,25 @@ const Step = Object.freeze({
   DONE: "done",
   FAILED: "failed",
 });
+
+// Binaries required on the Linux path before we can run bootstrap.sh.
+// `pkexec` (from policykit-1) opens the GUI sudo prompt; `curl` fetches
+// the bootstrap script; `bash` runs it. Almost always pre-installed on
+// Ubuntu Desktop, but minimal/server images may be missing some.
+const LINUX_PREREQS = Object.freeze([
+  { bin: "pkexec", pkg: "policykit-1" },
+  { bin: "curl", pkg: "curl" },
+  { bin: "bash", pkg: "bash" },
+]);
+
+async function _whichLinux(bin) {
+  try {
+    await execFileAsync("/usr/bin/which", [bin], { timeout: 3000 });
+    return true;
+  } catch {
+    return false;
+  }
+}
 
 function _httpHealthcheck(port = PANEL_PORT, timeoutMs = 3000) {
   return new Promise((resolve) => {
@@ -102,6 +122,24 @@ class BootstrapRunner extends EventEmitter {
   // ─── Linux (Ubuntu Desktop) ──────────────────────────────────────────
 
   async _runLinux() {
+    this._step(Step.PREFLIGHT);
+    const missing = [];
+    for (const { bin, pkg } of LINUX_PREREQS) {
+      if (!(await _whichLinux(bin))) missing.push({ bin, pkg });
+    }
+    if (missing.length) {
+      const pkgs = [...new Set(missing.map((m) => m.pkg))].join(" ");
+      const cmd = `sudo apt update && sudo apt install -y ${pkgs}`;
+      this.emit("preflight", {
+        missing,
+        installCommand: cmd,
+        hint:
+          `Thiếu công cụ: ${missing.map((m) => m.bin).join(", ")}. ` +
+          "Mở Terminal, chạy lệnh dưới, rồi quay lại bấm 'Đã chạy xong'.",
+      });
+      this._fail("preflight: missing required binaries");
+    }
+
     this._step(Step.RUN_BOOTSTRAP);
     // `pkexec` opens the desktop's polkit password dialog so the user
     // grants sudo with a GUI prompt — required for apt-install + systemd

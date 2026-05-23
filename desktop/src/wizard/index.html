@@ -82,23 +82,52 @@
         opacity: 0.4;
         cursor: not-allowed;
       }
+      .preflight {
+        display: none;
+        margin-top: 24px;
+        padding: 16px;
+        background: #1e1b13;
+        border: 1px solid #5b3a0e;
+        border-radius: 6px;
+      }
+      .preflight.show {
+        display: block;
+      }
+      .preflight .hint {
+        color: #fde68a;
+        margin: 0 0 12px;
+        font-size: 13px;
+      }
+      .preflight pre {
+        margin: 0 0 12px;
+        padding: 10px;
+        background: #0b0e14;
+        border-radius: 4px;
+        font-size: 12px;
+        color: #d6deeb;
+        user-select: all;
+      }
+      .preflight .row {
+        display: flex;
+        gap: 8px;
+      }
     </style>
   </head>
   <body>
     <h1>Đang chuẩn bị OpenClaw cho lần đầu sử dụng</h1>
-    <p class="lede">
-      OpenClaw cần WSL2 + Ubuntu để chạy backend. Quá trình này diễn ra
-      tự động — chỉ mất vài phút và chỉ làm 1 lần.
-    </p>
+    <p class="lede" id="lede">…</p>
 
-    <ol class="steps" id="steps">
-      <li data-step="probe">Kiểm tra hệ thống</li>
-      <li data-step="install_wsl">Cài WSL2 (cần restart sau)</li>
-      <li data-step="install_distro">Tải Ubuntu 22.04</li>
-      <li data-step="provision_distro">Cấu hình distro</li>
-      <li data-step="run_bootstrap">Cài OpenClaw backend</li>
-      <li data-step="healthcheck">Kiểm tra hoạt động</li>
-    </ol>
+    <ol class="steps" id="steps"></ol>
+
+    <div class="preflight" id="preflight">
+      <p class="hint" id="preflightHint"></p>
+      <pre id="preflightCmd"></pre>
+      <div class="row">
+        <button id="openTerminal">Mở Terminal</button>
+        <button id="copyCmd">Copy lệnh</button>
+        <button id="preflightContinue" class="primary">Đã chạy xong — Tiếp tục</button>
+      </div>
+    </div>
 
     <pre class="log" id="log"></pre>
 
@@ -113,11 +142,53 @@
     </div>
 
     <script>
+      // ─── Platform-aware step list ──────────────────────────────────
+      // Linux  : probe → preflight → run_bootstrap → healthcheck
+      // Win32  : probe → install_wsl → install_distro → provision_distro → run_bootstrap → healthcheck
+      const STEPS_BY_PLATFORM = {
+        linux: [
+          { key: "probe", label: "Kiểm tra hệ thống" },
+          { key: "preflight", label: "Kiểm tra công cụ (curl, pkexec)" },
+          { key: "run_bootstrap", label: "Cài OpenClaw + dependencies (cần password)" },
+          { key: "healthcheck", label: "Kiểm tra hoạt động" },
+        ],
+        win32: [
+          { key: "probe", label: "Kiểm tra hệ thống" },
+          { key: "install_wsl", label: "Cài WSL2 (cần restart sau)" },
+          { key: "install_distro", label: "Tải Ubuntu 22.04" },
+          { key: "provision_distro", label: "Cấu hình distro" },
+          { key: "run_bootstrap", label: "Cài OpenClaw backend" },
+          { key: "healthcheck", label: "Kiểm tra hoạt động" },
+        ],
+      };
+
+      const ledeText = {
+        linux:
+          "OpenClaw sẽ tự cài Node, Python, Caddy + openclaw lên máy bạn. Cần password sudo 1 lần.",
+        win32:
+          "OpenClaw cần WSL2 + Ubuntu để chạy backend. Quá trình này diễn ra tự động — chỉ làm 1 lần.",
+      };
+
+      const platform = window.openclawWizard.platform;
       const stepsEl = document.getElementById("steps");
       const logEl = document.getElementById("log");
+      const ledeEl = document.getElementById("lede");
       const retryBtn = document.getElementById("retry");
       const rebootBtn = document.getElementById("reboot");
       const closeBtn = document.getElementById("close");
+      const preflightEl = document.getElementById("preflight");
+      const preflightHint = document.getElementById("preflightHint");
+      const preflightCmd = document.getElementById("preflightCmd");
+      const preflightContinue = document.getElementById("preflightContinue");
+
+      ledeEl.textContent = ledeText[platform] ?? ledeText.linux;
+      const steps = STEPS_BY_PLATFORM[platform] ?? STEPS_BY_PLATFORM.linux;
+      for (const s of steps) {
+        const li = document.createElement("li");
+        li.dataset.step = s.key;
+        li.textContent = s.label;
+        stepsEl.appendChild(li);
+      }
 
       function setStepClass(stepName, cls) {
         for (const li of stepsEl.querySelectorAll("li")) {
@@ -130,6 +201,8 @@
         for (let i = 0; i < idx; i++) stepEls[i].classList.add("done");
       }
 
+      // ─── Event handlers ────────────────────────────────────────────
+
       window.openclawWizard.onStep(({ step }) => {
         if (step === "done" || step === "failed" || step === "reboot_required") return;
         markDoneBefore(step);
@@ -139,6 +212,12 @@
       window.openclawWizard.onLog(({ text }) => {
         logEl.textContent += text;
         logEl.scrollTop = logEl.scrollHeight;
+      });
+
+      window.openclawWizard.onPreflight(({ hint, installCommand }) => {
+        preflightHint.textContent = hint;
+        preflightCmd.textContent = installCommand;
+        preflightEl.classList.add("show");
       });
 
       window.openclawWizard.onReboot(() => {
@@ -154,15 +233,28 @@
       window.openclawWizard.onError(({ message }) => {
         const active = stepsEl.querySelector("li.active");
         if (active) active.classList.replace("active", "failed");
-        logEl.textContent += "\n❌ " + message;
+        logEl.textContent += "\n❌ " + message + "\n";
         retryBtn.disabled = false;
       });
 
-      retryBtn.addEventListener("click", () => {
+      // ─── Buttons ───────────────────────────────────────────────────
+
+      function resetAndRetry() {
         for (const li of stepsEl.querySelectorAll("li")) li.className = "";
         logEl.textContent = "";
+        preflightEl.classList.remove("show");
         retryBtn.disabled = true;
         window.openclawWizard.retry();
+      }
+
+      retryBtn.addEventListener("click", resetAndRetry);
+      preflightContinue.addEventListener("click", resetAndRetry);
+
+      document.getElementById("openTerminal").addEventListener("click", () => {
+        window.openclawWizard.openTerminal();
+      });
+      document.getElementById("copyCmd").addEventListener("click", async () => {
+        await navigator.clipboard.writeText(preflightCmd.textContent);
       });
     </script>
   </body>

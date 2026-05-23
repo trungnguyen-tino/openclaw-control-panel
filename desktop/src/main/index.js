@@ -221,6 +221,7 @@ async function runFirstRun() {
   // Stream every step + log line to the wizard renderer.
   runner.on("step", (e) => wizardWindow.webContents.send("bootstrap:step", e));
   runner.on("log", (e) => wizardWindow.webContents.send("bootstrap:log", e));
+  runner.on("preflight", (e) => wizardWindow.webContents.send("bootstrap:preflight", e));
 
   try {
     const verdict = await runner.run();
@@ -277,6 +278,23 @@ ipcMain.handle("settings:set", (_e, patch) => {
   return next;
 });
 ipcMain.handle("wizard:retry", () => runFirstRun());
+ipcMain.handle("wizard:open-terminal", () => {
+  // Best-effort "open a terminal" — Ubuntu Desktop ships with one of
+  // gnome-terminal / konsole / xterm. We try them in order and fall
+  // back to xdg-open of the user's home dir if none are present.
+  if (process.platform !== "linux") return false;
+  const { spawn } = require("node:child_process");
+  for (const cmd of ["gnome-terminal", "konsole", "xfce4-terminal", "xterm"]) {
+    try {
+      const child = spawn(cmd, [], { detached: true, stdio: "ignore" });
+      child.unref();
+      return true;
+    } catch {
+      // try next
+    }
+  }
+  return false;
+});
 ipcMain.handle("tunnel:start", () => tunnel.start());
 ipcMain.handle("tunnel:stop", () => tunnel.stop());
 ipcMain.handle("tunnel:status", () => ({ state: tunnel.state, url: tunnel.url }));

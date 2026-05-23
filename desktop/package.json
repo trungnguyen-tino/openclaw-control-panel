@@ -30,12 +30,6 @@
       "src/**/*",
       "resources/**/*"
     ],
-    "extraResources": [
-      {
-        "from": "../scripts/bootstrap-fix.sh",
-        "to": "bootstrap-fix.sh"
-      }
-    ],
     "win": {
       "target": [
         { "target": "nsis", "arch": ["x64"] }

@@ -39,9 +39,11 @@ desktop/
 └── resources/                # icons, bundled assets (TBD)
 ```
 
-The bootstrap shell script (`scripts/bootstrap-fix.sh`) is shared with the
-VPS path — `electron-builder`'s `extraResources` copies it into the
-installed app so first-run works offline.
+First-run pulls `bootstrap.sh` from the public GitHub Release inside the
+WSL distro — `bash -c 'curl … | bash -s -- --domain 127.0.0.1'`. That
+wraps the same `install.sh` the VPSes use, so Node 24 + openclaw npm +
+Python 3.12 + Caddy + the 3 systemd services land in the distro from
+scratch (~5-10 min on first launch).
 
 ## Development
 
@@ -83,7 +85,10 @@ users will see Windows SmartScreen warning on first install; click "More info
    - **DISTRO_MISSING** → `wsl --install -d Ubuntu-22.04`.
 3. Provision distro: write `/etc/wsl.conf` so it boots as root (no
    interactive "create unix user" prompt).
-4. Stream `bootstrap-fix.sh` into the distro via `wsl -- bash -s`.
+4. Run `bootstrap.sh --domain 127.0.0.1` from the public GitHub Release
+   inside the distro — `apt install` Node/Python/Caddy, `npm install -g
+   openclaw@latest`, extract the panel tarball, and start the 3 systemd
+   units (~5-10 min, progress streamed to wizard).
 5. Healthcheck: `curl http://127.0.0.1:9998/api/health` from inside the
    distro → must return 200.
 6. Settings flagged `bootstrapCompleted: true` → wizard closes, tray

@@ -16,8 +16,6 @@
 const { execFile, spawn } = require("node:child_process");
 const { promisify } = require("node:util");
 const { EventEmitter } = require("node:events");
-const path = require("node:path");
-const fs = require("node:fs");
 
 const wsl = require("./wsl-detector");
 
@@ -34,15 +32,6 @@ const Step = Object.freeze({
   DONE: "done",
   FAILED: "failed",
 });
-
-// Path to the bundled bootstrap-fix.sh — resolved differently in dev (relative
-// to repo) vs packaged (resources/ inside the installed app).
-function _bootstrapScriptPath(app) {
-  if (app && app.isPackaged) {
-    return path.join(process.resourcesPath, "bootstrap-fix.sh");
-  }
-  return path.resolve(__dirname, "../../../scripts/bootstrap-fix.sh");
-}
 
 class BootstrapRunner extends EventEmitter {
   constructor({ app } = {}) {
@@ -133,45 +122,49 @@ class BootstrapRunner extends EventEmitter {
   }
 
   async _runBootstrap() {
-    // Bootstrap script is shipped as a release asset; we ALSO bundle a
-    // copy inside the installer in case the host has no Internet on
-    // first run. Prefer the local copy when present.
-    const local = _bootstrapScriptPath(this._app);
-    if (fs.existsSync(local)) {
-      // Stream the local script into the distro's stdin so we don't need
-      // a Windows→Linux path translation. Distro reads from stdin and pipes
-      // it into `bash`.
-      await new Promise((resolve, reject) => {
-        const child = spawn(
-          "wsl.exe",
-          ["-d", wsl.REQUIRED_DISTRO, "-u", "root", "--", "bash", "-s"],
-          { windowsHide: true }
-        );
-        const script = fs.createReadStream(local);
-        script.pipe(child.stdin);
-        let stderr = "";
-        child.stderr.on("data", (d) => {
-          const text = d.toString("utf8");
-          stderr += text;
-          this.emit("log", { stream: "stderr", text });
-        });
-        child.stdout.on("data", (d) =>
-          this.emit("log", { stream: "stdout", text: d.toString("utf8") })
-        );
-        child.on("error", reject);
-        child.on("close", (code) =>
-          code === 0
-            ? resolve()
-            : reject(new Error(`bootstrap exited ${code}: ${stderr.slice(0, 4000)}`))
-        );
+    // Fresh WSL2 distro has nothing installed — call bootstrap.sh which
+    // wraps install.sh to apt-install node + python + caddy, npm-install
+    // openclaw@latest, extract the panel tarball, and bring up the three
+    // systemd units. `bootstrap-fix.sh` is *upgrade-only* (assumes panel
+    // already installed) so it would skip every prerequisite here.
+    //
+    // Domain = 127.0.0.1 keeps Caddy on self-signed `tls internal` mode;
+    // Electron talks directly to gunicorn :9998 so Caddy is mostly
+    // dormant in this deployment.
+    const installArgs = "--domain 127.0.0.1";
+    // Stream stdout/stderr line-by-line so the wizard sees real-time
+    // progress through ~5-10 min of apt-get + npm install.
+    await new Promise((resolve, reject) => {
+      const child = spawn(
+        "wsl.exe",
+        [
+          "-d",
+          wsl.REQUIRED_DISTRO,
+          "-u",
+          "root",
+          "--",
+          "bash",
+          "-lc",
+          `curl -fsSL https://github.com/trungnguyen-tino/openclaw-control-panel/releases/latest/download/bootstrap.sh | bash -s -- ${installArgs}`,
+        ],
+        { windowsHide: true }
+      );
+      let stderr = "";
+      child.stderr.on("data", (d) => {
+        const text = d.toString("utf8");
+        stderr += text;
+        this.emit("log", { stream: "stderr", text });
       });
-      return;
-    }
-    // Fallback: fetch the public release asset over the wire from inside
-    // the distro itself (faster + simpler than going through Windows).
-    await wsl.execInDistro(
-      "curl -fsSL https://github.com/trungnguyen-tino/openclaw-control-panel/releases/latest/download/bootstrap-fix.sh | bash"
-    );
+      child.stdout.on("data", (d) =>
+        this.emit("log", { stream: "stdout", text: d.toString("utf8") })
+      );
+      child.on("error", reject);
+      child.on("close", (code) =>
+        code === 0
+          ? resolve()
+          : reject(new Error(`bootstrap exited ${code}: ${stderr.slice(0, 4000)}`))
+      );
+    });
   }
 
   async _healthcheck() {

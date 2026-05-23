@@ -1,37 +1,64 @@
-// First-run orchestrator: take the host from "nothing installed" to
-// "openclaw-mgmt is serving 127.0.0.1:9998" with progress events that the
-// wizard UI streams to the user.
+// First-run orchestrator — takes the host from "nothing installed" to
+// "openclaw-mgmt is serving 127.0.0.1:9998", with progress events the
+// wizard streams to the user.
 //
-// Strategy:
-//   1. wsl-detector.probe()         → see what we already have
-//   2. install WSL2 if missing      → `wsl --install --no-distribution`
-//   3. install Ubuntu-22.04 distro  → `wsl --install -d Ubuntu-22.04`
-//   4. run bootstrap-fix.sh         → exec inside the distro as root
+// Two platform branches, picked at runtime:
 //
-// Steps 2 + 3 each need a reboot on most fresh Windows images — the
-// wizard surfaces that to the user instead of swallowing it silently.
+//   Linux  → pkexec bash -c 'curl bootstrap.sh | bash -s -- --domain 127.0.0.1'
+//            (polkit GUI password prompt; backend runs on the host directly,
+//            no WSL involved).
+//
+//   Win32  → install WSL2 + Ubuntu-22.04 distro if missing, then run
+//            bootstrap.sh INSIDE the distro via `wsl -- bash -lc '…'`.
+//
+// Both branches short-circuit if the backend is already healthy on
+// localhost:9998 — handy when the user manually pre-installed via
+// `curl … | sudo bash`, or when they launch the app after a successful
+// bootstrap.
 
 "use strict";
 
 const { execFile, spawn } = require("node:child_process");
 const { promisify } = require("node:util");
 const { EventEmitter } = require("node:events");
+const http = require("node:http");
 
 const wsl = require("./wsl-detector");
 
 const execFileAsync = promisify(execFile);
+
+const BOOTSTRAP_URL =
+  "https://github.com/trungnguyen-tino/openclaw-control-panel/releases/latest/download/bootstrap.sh";
+const PANEL_PORT = 9998;
 
 const Step = Object.freeze({
   PROBE: "probe",
   INSTALL_WSL: "install_wsl",
   REBOOT_REQUIRED: "reboot_required",
   INSTALL_DISTRO: "install_distro",
-  PROVISION_DISTRO: "provision_distro", // first-run "set unix user" prompt
+  PROVISION_DISTRO: "provision_distro",
   RUN_BOOTSTRAP: "run_bootstrap",
   HEALTHCHECK: "healthcheck",
   DONE: "done",
   FAILED: "failed",
 });
+
+function _httpHealthcheck(port = PANEL_PORT, timeoutMs = 3000) {
+  return new Promise((resolve) => {
+    const req = http.get(
+      { host: "127.0.0.1", port, path: "/api/health", timeout: timeoutMs },
+      (res) => {
+        res.resume();
+        resolve(res.statusCode === 200);
+      }
+    );
+    req.on("error", () => resolve(false));
+    req.on("timeout", () => {
+      req.destroy();
+      resolve(false);
+    });
+  });
+}
 
 class BootstrapRunner extends EventEmitter {
   constructor({ app } = {}) {
@@ -54,16 +81,50 @@ class BootstrapRunner extends EventEmitter {
     throw new Error(reason);
   }
 
-  // Promise that resolves to the final Step value, or rejects with Error.
   async run() {
+    // Already healthy? (Manual pre-install, or re-launch after a previous
+    // successful bootstrap.) Skip the whole flow.
     this._step(Step.PROBE);
+    if (await _httpHealthcheck()) {
+      this._step(Step.DONE);
+      return Step.DONE;
+    }
+
+    if (process.platform === "linux") {
+      return this._runLinux();
+    }
+    if (process.platform === "win32") {
+      return this._runWindows();
+    }
+    this._fail(`Unsupported platform: ${process.platform}`);
+  }
+
+  // ─── Linux (Ubuntu Desktop) ──────────────────────────────────────────
+
+  async _runLinux() {
+    this._step(Step.RUN_BOOTSTRAP);
+    // `pkexec` opens the desktop's polkit password dialog so the user
+    // grants sudo with a GUI prompt — required for apt-install + systemd
+    // unit writes. `bash -c '…'` is run as root after auth succeeds.
+    const cmd = `curl -fsSL ${BOOTSTRAP_URL} | bash -s -- --domain 127.0.0.1`;
+    await this._spawnStreaming("pkexec", ["bash", "-c", cmd]);
+
+    this._step(Step.HEALTHCHECK);
+    if (!(await _httpHealthcheck(PANEL_PORT, 10_000))) {
+      this._fail("Linux bootstrap finished but :9998 still unreachable");
+    }
+    this._step(Step.DONE);
+    return Step.DONE;
+  }
+
+  // ─── Windows (WSL2 + Ubuntu-22.04 distro) ────────────────────────────
+
+  async _runWindows() {
     const probe = await wsl.probe();
 
     if (probe.status === wsl.Status.WSL_MISSING) {
       this._step(Step.INSTALL_WSL);
       await this._installWsl();
-      // `wsl --install` requires a reboot before the distro can start. The
-      // wizard tells the user to reboot and re-launch the app.
       this._step(Step.REBOOT_REQUIRED);
       return Step.REBOOT_REQUIRED;
     }
@@ -77,7 +138,6 @@ class BootstrapRunner extends EventEmitter {
     if (probe.status === wsl.Status.ERROR) {
       this._fail(probe.reason || "WSL probe failed");
     }
-
     if (probe.status === wsl.Status.DISTRO_MISSING) {
       this._step(Step.INSTALL_DISTRO);
       await this._installDistro();
@@ -85,20 +145,32 @@ class BootstrapRunner extends EventEmitter {
       await this._provisionDistroRoot();
     }
 
-    // Distro is now present and the root user is usable.
     this._step(Step.RUN_BOOTSTRAP);
-    await this._runBootstrap();
+    await this._spawnStreaming("wsl.exe", [
+      "-d",
+      wsl.REQUIRED_DISTRO,
+      "-u",
+      "root",
+      "--",
+      "bash",
+      "-lc",
+      `curl -fsSL ${BOOTSTRAP_URL} | bash -s -- --domain 127.0.0.1`,
+    ]);
 
     this._step(Step.HEALTHCHECK);
-    await this._healthcheck();
-
+    // Probe through the distro — localhost forwarding is sometimes slow
+    // to attach the first time, and probing from Windows-side can race.
+    const r = await wsl.execInDistro(
+      `curl -sSf -o /dev/null -w '%{http_code}' http://127.0.0.1:${PANEL_PORT}/api/health`
+    );
+    if (!/^200$/.test(r.stdout.trim())) {
+      this._fail(`mgmt-api healthcheck returned ${r.stdout.trim() || "<empty>"}`);
+    }
     this._step(Step.DONE);
     return Step.DONE;
   }
 
   async _installWsl() {
-    // `--no-distribution` keeps the install fast and unattended; we install
-    // Ubuntu in a separate step so we can report progress for each.
     await execFileAsync(
       "wsl.exe",
       ["--install", "--no-distribution", "--no-launch"],
@@ -114,70 +186,41 @@ class BootstrapRunner extends EventEmitter {
     );
   }
 
-  // Fresh Ubuntu image's first launch normally prompts for a non-root unix
-  // user — we don't want that interactive flow. Force root-only mode so
-  // every subsequent `wsl -d Ubuntu-22.04 -u root` works without UID 1000.
   async _provisionDistroRoot() {
     await wsl.execInDistro("echo '[boot]\\ndefault=root' > /etc/wsl.conf");
   }
 
-  async _runBootstrap() {
-    // Fresh WSL2 distro has nothing installed — call bootstrap.sh which
-    // wraps install.sh to apt-install node + python + caddy, npm-install
-    // openclaw@latest, extract the panel tarball, and bring up the three
-    // systemd units. `bootstrap-fix.sh` is *upgrade-only* (assumes panel
-    // already installed) so it would skip every prerequisite here.
-    //
-    // Domain = 127.0.0.1 keeps Caddy on self-signed `tls internal` mode;
-    // Electron talks directly to gunicorn :9998 so Caddy is mostly
-    // dormant in this deployment.
-    const installArgs = "--domain 127.0.0.1";
-    // Stream stdout/stderr line-by-line so the wizard sees real-time
-    // progress through ~5-10 min of apt-get + npm install.
-    await new Promise((resolve, reject) => {
-      const child = spawn(
-        "wsl.exe",
-        [
-          "-d",
-          wsl.REQUIRED_DISTRO,
-          "-u",
-          "root",
-          "--",
-          "bash",
-          "-lc",
-          `curl -fsSL https://github.com/trungnguyen-tino/openclaw-control-panel/releases/latest/download/bootstrap.sh | bash -s -- ${installArgs}`,
-        ],
-        { windowsHide: true }
-      );
+  // ─── Shared helpers ──────────────────────────────────────────────────
+
+  // Spawns a child + forwards stdout/stderr as `log` events. Resolves on
+  // exit code 0; rejects with an Error carrying tail of stderr otherwise.
+  _spawnStreaming(file, args, { timeoutMs = 1_200_000 } = {}) {
+    return new Promise((resolve, reject) => {
+      const child = spawn(file, args, { windowsHide: true });
       let stderr = "";
+      const timer = setTimeout(() => {
+        child.kill("SIGTERM");
+        reject(new Error(`${file} timed out after ${Math.round(timeoutMs / 1000)}s`));
+      }, timeoutMs);
+      child.stdout.on("data", (d) =>
+        this.emit("log", { stream: "stdout", text: d.toString("utf8") })
+      );
       child.stderr.on("data", (d) => {
         const text = d.toString("utf8");
         stderr += text;
         this.emit("log", { stream: "stderr", text });
       });
-      child.stdout.on("data", (d) =>
-        this.emit("log", { stream: "stdout", text: d.toString("utf8") })
-      );
-      child.on("error", reject);
-      child.on("close", (code) =>
-        code === 0
-          ? resolve()
-          : reject(new Error(`bootstrap exited ${code}: ${stderr.slice(0, 4000)}`))
-      );
+      child.on("error", (err) => {
+        clearTimeout(timer);
+        reject(err);
+      });
+      child.on("close", (code) => {
+        clearTimeout(timer);
+        if (code === 0) return resolve();
+        reject(new Error(`${file} exited ${code}: ${stderr.slice(-4000)}`));
+      });
     });
-  }
-
-  async _healthcheck() {
-    // localhost in WSL2 transparently forwards to Windows. Probe through
-    // the distro so we don't depend on Windows networking quirks during
-    // first boot (Defender Firewall prompts, etc).
-    const r = await wsl.execInDistro(
-      "curl -sSf -o /dev/null -w '%{http_code}' http://127.0.0.1:9998/api/health"
-    );
-    if (!/^200$/.test(r.stdout.trim())) {
-      this._fail(`mgmt-api healthcheck returned ${r.stdout.trim() || "<empty>"}`);
-    }
   }
 }
 
-module.exports = { BootstrapRunner, Step };
+module.exports = { BootstrapRunner, Step, PANEL_PORT };

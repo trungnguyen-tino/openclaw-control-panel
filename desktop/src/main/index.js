@@ -14,15 +14,19 @@
 
 "use strict";
 
-const { app, Tray, Menu, BrowserWindow, ipcMain, shell, nativeImage } = require("electron");
+const { app, Tray, Menu, BrowserWindow, ipcMain, shell, clipboard, nativeImage } =
+  require("electron");
 const path = require("node:path");
 const fs = require("node:fs");
 
 const { BootstrapRunner, Step } = require("./bootstrap-runner");
+const { CloudflaredManager, State: TunnelState } = require("./cloudflared-manager");
 
 const PANEL_URL = "http://127.0.0.1:9998";
 const TRAY_ICON = path.join(__dirname, "../../resources/tray.png");
 const SETTINGS_FILE = path.join(app.getPath("userData"), "settings.json");
+
+const tunnel = new CloudflaredManager({ app });
 
 // ─── Settings ─────────────────────────────────────────────────────────────
 
@@ -101,13 +105,56 @@ function getOrCreateWindow() {
   return mainWindow;
 }
 
+function _tunnelMenuItem() {
+  switch (tunnel.state) {
+    case TunnelState.RUNNING:
+      return [
+        {
+          label: `URL từ xa: ${tunnel.url}`,
+          click: () => {
+            clipboard.writeText(tunnel.url);
+            shell.openExternal(tunnel.url);
+          },
+        },
+        {
+          label: "  Copy URL",
+          click: () => clipboard.writeText(tunnel.url),
+        },
+        {
+          label: "  Tắt URL từ xa",
+          click: () => tunnel.stop(),
+        },
+      ];
+    case TunnelState.STARTING:
+    case TunnelState.DOWNLOADING:
+      return [{ label: "URL từ xa: đang khởi tạo…", enabled: false }];
+    case TunnelState.ERROR:
+      return [
+        {
+          label: "URL từ xa: lỗi — thử lại",
+          click: () => tunnel.start().catch(() => rebuildTrayMenu()),
+        },
+      ];
+    default:
+      return [
+        {
+          label: "Bật URL từ xa (Cloudflare Tunnel)",
+          click: () => tunnel.start().catch(() => rebuildTrayMenu()),
+        },
+      ];
+  }
+}
+
 function buildTrayMenu() {
   const s = loadSettings();
+  const platformLabel = process.platform === "win32" ? "Windows" : "máy";
   return Menu.buildFromTemplate([
     { label: "Mở Panel", click: () => getOrCreateWindow() },
     { type: "separator" },
+    ..._tunnelMenuItem(),
+    { type: "separator" },
     {
-      label: "Khởi động cùng Windows",
+      label: `Khởi động cùng ${platformLabel}`,
       type: "checkbox",
       checked: s.autoStart,
       click: (item) => {
@@ -126,11 +173,19 @@ function buildTrayMenu() {
       label: "Thoát",
       click: () => {
         app._isQuitting = true;
-        app.quit();
+        tunnel.stop().finally(() => app.quit());
       },
     },
   ]);
 }
+
+function rebuildTrayMenu() {
+  if (tray) tray.setContextMenu(buildTrayMenu());
+}
+
+// React to tunnel lifecycle so the tray label flips live.
+tunnel.on("state", rebuildTrayMenu);
+tunnel.on("closed", rebuildTrayMenu);
 
 function buildTray() {
   if (tray) return;
@@ -218,7 +273,10 @@ ipcMain.handle("settings:get", () => loadSettings());
 ipcMain.handle("settings:set", (_e, patch) => {
   const next = saveSettings(patch);
   if ("autoStart" in patch) syncAutoStart(next.autoStart);
-  tray?.setContextMenu(buildTrayMenu());
+  rebuildTrayMenu();
   return next;
 });
 ipcMain.handle("wizard:retry", () => runFirstRun());
+ipcMain.handle("tunnel:start", () => tunnel.start());
+ipcMain.handle("tunnel:stop", () => tunnel.stop());
+ipcMain.handle("tunnel:status", () => ({ state: tunnel.state, url: tunnel.url }));

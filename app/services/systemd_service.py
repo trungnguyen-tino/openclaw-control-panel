@@ -35,15 +35,29 @@ def restart(name: str) -> tuple[bool, str]:
     return ok, (r.stderr or r.stdout).strip()
 
 
-def restart_detached(name: str) -> tuple[bool, str]:
-    """Fire-and-forget restart — does not wait for the job to complete.
+_SYSTEMD_RUN: Final[str] = "/usr/bin/systemd-run"
 
-    Required when the caller is itself inside the unit being restarted:
-    a blocking `systemctl restart` deadlocks because systemd kills our
-    process mid-call, leaving stderr empty and returncode negative.
+
+def restart_detached(name: str) -> tuple[bool, str]:
+    """Schedule a restart 2s in the future as a transient systemd unit.
+
+    `systemctl --no-block restart` from inside the unit being restarted
+    still races: systemd starts killing our gunicorn before systemctl can
+    return, so the caller sees an empty-stderr non-zero exit and the
+    restart never actually executes (observed in production: PID +
+    ActiveEnterTimestamp unchanged after the call).
+
+    `systemd-run --on-active=2 systemctl restart <unit>` creates a
+    one-shot transient timer that fires 2 seconds later. systemd-run
+    itself exits immediately after registering the timer (~5ms), our
+    process exits cleanly, then 2s later systemd fires the restart with
+    no caller still attached to kill.
     """
     _assert_allowed(name)
-    r = run_cmd([_SYSTEMCTL, "--no-block", "restart", name], timeout=10)
+    r = run_cmd(
+        [_SYSTEMD_RUN, "--on-active=2", "--quiet", _SYSTEMCTL, "restart", name],
+        timeout=10,
+    )
     ok = r.returncode == 0
     return ok, (r.stderr or r.stdout).strip()
 

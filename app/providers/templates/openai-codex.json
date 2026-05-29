@@ -2,11 +2,20 @@
   "agents": {
     "defaults": {
       "model": {
-        "primary": "openai-codex/gpt-5.4"
+        "primary": "openai-codex/gpt-5.4",
+        "fallbacks": ["openai-codex/gpt-5.4-mini"]
       },
+      "timeoutSeconds": 600,
       "maxConcurrent": 4,
       "subagents": {
         "maxConcurrent": 8
+      }
+    }
+  },
+  "models": {
+    "providers": {
+      "openai-codex": {
+        "timeoutSeconds": 240
       }
     }
   },

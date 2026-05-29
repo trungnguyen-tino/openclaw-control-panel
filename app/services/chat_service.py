@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 from typing import Any
 
 from app.services.openclaw_config_service import get_active_provider_model
@@ -17,7 +18,13 @@ from app.utils.subprocess_safe import run_cmd
 log = logging.getLogger("openclaw.chat")
 
 _OPENCLAW_BIN = "/usr/bin/openclaw"
-_DEFAULT_TIMEOUT_S = 120.0
+# Wrapper subprocess timeout. Must comfortably exceed the longest expected
+# model call: slow reasoning models (gpt-5.4, claude-opus, deepseek-r1) can
+# take 3-4 minutes on hard prompts. Customers reported the prior 120s ceiling
+# killed legitimate completions that succeeded on the CLI (which uses
+# openclaw's own per-provider timeout, defaulting much higher).
+# Override via OPENCLAW_CHAT_TIMEOUT_S env when needed.
+_DEFAULT_TIMEOUT_S = float(os.environ.get("OPENCLAW_CHAT_TIMEOUT_S", "600"))
 
 
 def one_shot(

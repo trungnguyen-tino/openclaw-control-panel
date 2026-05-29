@@ -61,30 +61,33 @@ else
   echo "       env already points at public (or .env missing — skipped)"
 fi
 
-echo "[5/5] Restart openclaw-mgmt (detached)"
+echo "[5/5] Schedule openclaw-mgmt restart in 10s"
 systemctl daemon-reload
-# --no-block: don't wait for the restart job to finish. When this script is
-# run from the panel's own Terminal page, a blocking restart kills our SSE
-# session mid-call and the script exits with -15 before printing verify.
-systemctl --no-block restart openclaw-mgmt
+# When this script runs from the panel's own Terminal page, the moment
+# openclaw-mgmt restarts the SSE session dies and bash receives SIGTERM
+# before the verify block can print. `systemctl --no-block` was still
+# racy because systemd kicks the restart job almost immediately.
+#
+# Use systemd-run --on-active=10 to push the restart 10 seconds into
+# the future. systemd-run exits in milliseconds (no race), then the
+# verify block below runs to completion within the 10s window, then
+# systemd fires the restart cleanly.
+systemd-run --on-active=10 --quiet --unit=openclaw-mgmt-bootstrap-restart \
+  /usr/bin/systemctl restart openclaw-mgmt 2>/dev/null || \
+  systemctl --no-block restart openclaw-mgmt   # fallback if systemd-run unavailable
 
-# Give systemd a moment to actually relaunch before we probe.
-sleep 8
-
-# ---- verify ----
-if systemctl is-active --quiet openclaw-mgmt; then
-  echo
-  echo "[verify] openclaw-mgmt: active"
-else
-  echo
-  echo "[verify] ERROR — openclaw-mgmt is NOT active. Run: journalctl -u openclaw-mgmt -n 50" >&2
-  exit 1
-fi
-
+# ---- verify (runs BEFORE the scheduled restart fires) ----
+echo
 if grep -q "_promote_to_live" "$MGMT_DIR/app/services/self_update_service.py" 2>/dev/null; then
-  echo "[verify] code: $TAG installed (promote-to-live present)"
+  echo "[verify] code: $TAG đã cài (promote-to-live present)"
 else
   echo "[verify] WARNING: _promote_to_live marker missing — tarball older than v0.2.10?" >&2
+fi
+
+if systemctl is-active --quiet openclaw-mgmt; then
+  echo "[verify] openclaw-mgmt: active (sẽ tự restart sau ~10s để load code mới)"
+else
+  echo "[verify] WARNING: openclaw-mgmt KHÔNG active — chạy: journalctl -u openclaw-mgmt -n 50" >&2
 fi
 
 if curl -sSf -o /dev/null -w "[verify] http://127.0.0.1:9998/api/health → %{http_code}\n" \
@@ -95,4 +98,6 @@ else
 fi
 
 echo
-echo "Done. Future panel self-updates with tag=latest will work end-to-end."
+echo "Done. openclaw-mgmt sẽ tự restart trong ~10 giây để load code $TAG."
+echo "Sau khi restart, Terminal page sẽ reconnect tự động."
+echo "Future panel self-updates with tag=latest will work end-to-end."
